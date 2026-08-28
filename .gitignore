@@ -1,0 +1,9 @@
+.DS_Store
+
+# De onversleutelde kaart hoort niet in een publieke repo.
+# Alleen kaart.enc wordt gecommit.
+kaart.webp
+kaart.png
+kaart.jpg
+kaart400-*.png
+kaart_crop.png
