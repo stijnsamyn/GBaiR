@@ -1,0 +1,321 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=6,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow,noarchive">
+<meta name="theme-color" content="#12263a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="WTC">
+<title>WTC — kaart uitlijnen</title>
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="vendor/leaflet.css">
+<link rel="stylesheet" href="stijl.css">
+</head>
+<body>
+
+<div id="map"></div>
+<a id="terug" class="pill" href="index.html">‹ kaart</a>
+<div id="status" class="pill" style="left:auto;right:max(10px,env(safe-area-inset-right));top:max(10px,env(safe-area-inset-top))">uitlijnen</div>
+
+<div id="fade" class="pill">
+  <label for="op">Doorzicht kaart</label>
+  <input id="op" type="range" min="0.25" max="1" step="0.05" value="0.65">
+</div>
+
+<div id="align" class="pill on">
+  <h2>Kaart uitlijnen</h2>
+  <p class="sub">Sleep de blauwe greep naar het midden van het terrein en stem bij tot de plattegrond op de luchtfoto past.</p>
+
+  <div class="grid">
+    <span></span><button data-a="n">↑</button><span></span>
+    <button data-a="w">←</button><button data-a="rst" title="Terug naar de gepubliceerde plaatsing">⟲</button><button data-a="e">→</button>
+    <span></span><button data-a="s">↓</button><span></span>
+  </div>
+
+  <div class="row">
+    <span style="font-size:12px;opacity:.7">grootte</span>
+    <button data-a="-">−</button><button data-a="+">+</button>
+    <span style="font-size:12px;opacity:.7;margin-left:8px">draaien</span>
+    <button data-a="ccw">↺</button><button data-a="cw">↻</button>
+  </div>
+
+  <div class="row">
+    <button class="wide" id="btnStep" aria-pressed="false">stap: grof</button>
+    <button class="wide" id="btnLock" aria-pressed="true">verhouding vast</button>
+    <button class="wide" id="btnCopy">kopieer</button>
+  </div>
+
+  <div class="row" id="prikrij">
+    <button class="wide" id="btnPrik" aria-pressed="false">punten prikken</button>
+    <button class="wide" id="btnPas">bereken passing</button>
+    <button class="wide" id="btnWisPunt">punt weg</button>
+  </div>
+  <p id="puntental"></p>
+  <div id="passing"></div>
+
+  <details id="blok">
+    <summary>blok om te publiceren</summary>
+    <p id="uitleg">Wat je hier bijstelt geldt <b>alleen op dit toestel</b>. Om het
+    voor iedereen te laten gelden: tik <b>kopieer</b> en zet dit blok in
+    <code>plaatsing.json</code> in de repo. Het versienummer is al verhoogd —
+    daardoor laat elk toestel bij het volgende openen zijn eigen bijstelling los
+    en neemt deze over.</p>
+    <div id="readout"></div>
+    <p id="versie"></p>
+    <div id="hoekenuit"></div>
+  </details>
+</div>
+
+<div id="slot">
+  <form class="kaartje" id="slotform">
+    <img src="icons/icon-192.png" alt="">
+    <h1>WTC — uitlijnen</h1>
+    <p>De plattegrond is versleuteld. Geef het wachtwoord.</p>
+    <input id="ww" type="password" inputmode="text" autocomplete="current-password"
+           enterkeyhint="go" autocapitalize="characters" spellcheck="false"
+           aria-label="Wachtwoord" placeholder="wachtwoord">
+    <button type="submit" id="slotknop">Openen</button>
+    <div id="slotfout" role="status"></div>
+  </form>
+</div>
+
+<script>window.ACHTERGROND = 'lucht';</script>
+<script src="vendor/leaflet.js"></script>
+<script src="vendor/leaflet-imageoverlay-rotated.js"></script>
+<script src="kaartkern.js"></script>
+<script>
+/* Instellingenpagina: de kaart op de aarde leggen. De rest staat in kaartkern.js. */
+
+const statusEl = document.getElementById('status');
+melden = (t, k='') => { statusEl.textContent = t; statusEl.className = 'pill ' + k; };
+
+let fijn = false;
+
+/* de greep verschijnt zodra de kaart er is */
+naOntsleutelen = () => {
+  if (greep) return;
+  greep = L.marker([P.lat, P.lon], { draggable:true, autoPan:true,
+            title:'Sleep om de kaart te verplaatsen' }).addTo(map);
+  greep.on('drag dragend', ev => {
+    const ll = ev.target.getLatLng(); P.lat = ll.lat; P.lon = ll.lng;
+    if (overlay){ const h = hoeken(P); overlay.reposition(h.lb, h.rb, h.lo); }
+    plaatsVector(); lees();
+    if (ev.type === 'dragend') bewaar();
+  });
+  lees();
+};
+naTekenen = () => lees();
+
+document.getElementById('btnStep').onclick = e => {
+  fijn = !fijn; e.target.setAttribute('aria-pressed', fijn);
+  e.target.textContent = 'stap: ' + (fijn ? 'fijn' : 'grof'); };
+document.getElementById('btnLock').onclick = e => {
+  verhoudingVast = !verhoudingVast; e.target.setAttribute('aria-pressed', verhoudingVast);
+  e.target.textContent = verhoudingVast ? 'verhouding vast' : 'verhouding vrij'; };
+
+document.querySelectorAll('#align button[data-a]').forEach(b => {
+  b.onclick = () => {
+    const m   = fijn ? 1    : 10;    // meter
+    const pct = fijn ? .002 : .02;   // schaal
+    const gr  = fijn ? .1   : 1;     // graden
+    switch (b.dataset.a){
+      case 'n': P.lat += m / M_LAT; break;
+      case 's': P.lat -= m / M_LAT; break;
+      case 'e': P.lon += m / mLon(P.lat); break;
+      case 'w': P.lon -= m / mLon(P.lat); break;
+      case '+': P.w *= 1+pct; P.h = verhoudingVast ? P.w/verhouding : P.h*(1+pct); break;
+      case '-': P.w *= 1-pct; P.h = verhoudingVast ? P.w/verhouding : P.h*(1-pct); break;
+      case 'cw':  P.rot += gr; break;
+      case 'ccw': P.rot -= gr; break;
+      case 'rst': P = Object.assign({}, START, kies(gepubliceerd));   // terug naar wat gepubliceerd is
+                  try { localStorage.removeItem(KEY); } catch(e){}
+                  break;
+    }
+    teken(); if (b.dataset.a !== 'rst') bewaar();
+  };
+});
+
+/* Het blok dat gepubliceerd moet worden is precies de inhoud van plaatsing.json. */
+const vandaag = () => new Date().toISOString().slice(0,10);
+function lees(){
+  const n = (v,d) => +(+v).toFixed(d);
+  const nieuw = {
+    versie: (gepubliceerd ? gepubliceerd.versie : 0) + 1,
+    lat: n(P.lat,7), lon: n(P.lon,7), w: n(P.w,1), h: n(P.h,1), rot: n(P.rot,2),
+    opmerking: 'uitgelijnd op ' + vandaag()
+  };
+  document.getElementById('readout').textContent = JSON.stringify(nieuw, null, 2);
+  document.getElementById('versie').textContent = gepubliceerd
+    ? 'Nu gepubliceerd: versie ' + gepubliceerd.versie +
+      (gepubliceerd.opmerking ? ' — ' + gepubliceerd.opmerking : '')
+    : 'Er staat nog geen plaatsing.json; dit wordt versie 1.';
+
+  const h = hoeken(P), g = (v) => v.toFixed(6);
+  document.getElementById('hoekenuit').textContent =
+    'hoeken  lb ' + g(h.lb.lat) + ', ' + g(h.lb.lng) +
+    '\n        rb ' + g(h.rb.lat) + ', ' + g(h.rb.lng) +
+    '\n        lo ' + g(h.lo.lat) + ', ' + g(h.lo.lng) +
+    '\n        ro ' + g(h.ro.lat) + ', ' + g(h.ro.lng);
+}
+
+document.getElementById('btnCopy').onclick = async () => {
+  try { await navigator.clipboard.writeText(document.getElementById('readout').textContent);
+        melden('Gekopieerd — zet het in plaatsing.json'); }
+  catch(e){ melden('Kopiëren lukt niet — selecteer het blok zelf', 'warn'); }
+};
+
+lees();
+
+/* ------------------------------------------------------------------ *
+ * Controlepunten.
+ *
+ * Een controlepunt koppelt een plek op de tékening aan diezelfde plek
+ * op de aarde. De tekenplek wordt bewaard als plancoördinaat (0-1), niet
+ * als lengte- en breedtegraad — anders zou hij meeschuiven zodra de
+ * passing de kaart verlegt, en dat is precies wat we willen meten.
+ *
+ * Met drie punten of meer wordt de best passende plaatsing berekend. Uit
+ * de restafwijking blijkt meteen of het plan alleen verschoven en gedraaid
+ * is, of dat het getekend is en nergens precies past.
+ * ------------------------------------------------------------------ */
+const GCPKEY = 'wtc_gcp_v1';
+let punten = [];
+let prikken = false, halve = null;          // halve = het al geprikte tekenpunt
+const gPunten = L.layerGroup().addTo(map);
+
+try { punten = JSON.parse(localStorage.getItem(GCPKEY)) || []; } catch(e){ punten = []; }
+const bewaarPunten = () => { try { localStorage.setItem(GCPKEY, JSON.stringify(punten)); } catch(e){} };
+
+function tekenPunten(){
+  gPunten.clearLayers();
+  punten.forEach((pt, i) => {
+    const op = naarLatLng([pt.u, pt.v]), echt = L.latLng(pt.lat, pt.lon);
+    L.polyline([op, echt], { color:'#ff8a00', weight:2, dashArray:'4 4' }).addTo(gPunten);
+    L.circleMarker(op, { radius:6, color:'#fff', weight:2, fillColor:'#1e7bff', fillOpacity:1 })
+      .bindTooltip(String(i+1), { permanent:true, direction:'top', className:'etiket code' }).addTo(gPunten);
+    L.circleMarker(echt, { radius:6, color:'#fff', weight:2, fillColor:'#ff8a00', fillOpacity:1 }).addTo(gPunten);
+  });
+  if (halve)
+    L.circleMarker(naarLatLng([halve.u, halve.v]),
+      { radius:6, color:'#fff', weight:2, fillColor:'#1e7bff', fillOpacity:.6 }).addTo(gPunten);
+  const el = document.getElementById('puntental');
+  if (el) el.textContent = punten.length + ' punt' + (punten.length === 1 ? '' : 'en')
+        + (punten.length < 3 ? ' — vanaf 3 kan er gerekend worden' : '');
+}
+
+map.on('click', e => {
+  if (!prikken) return;
+  if (!halve){
+    const [u,v] = naarUV(e.latlng);
+    halve = { u, v };
+    melden('Tik nu dezelfde plek op de luchtfoto');
+  } else {
+    punten.push({ u:halve.u, v:halve.v, lat:e.latlng.lat, lon:e.latlng.lng });
+    halve = null; bewaarPunten();
+    melden('Punt ' + punten.length + ' gezet — tik de volgende plek op de tekening');
+  }
+  tekenPunten();
+});
+
+/* --- kleinste kwadraten: p*U + q*V + r = doel, opgelost met 3x3 --- */
+function los3(A, b){
+  const M = A.map((r,i) => r.concat([b[i]]));
+  for (let k = 0; k < 3; k++){
+    let p = k;
+    for (let i = k+1; i < 3; i++) if (Math.abs(M[i][k]) > Math.abs(M[p][k])) p = i;
+    [M[k], M[p]] = [M[p], M[k]];
+    if (Math.abs(M[k][k]) < 1e-12) return null;          // punten liggen op één lijn
+    for (let i = k+1; i < 3; i++){
+      const f = M[i][k] / M[k][k];
+      for (let j = k; j < 4; j++) M[i][j] -= f * M[k][j];
+    }
+  }
+  const x = [0,0,0];
+  for (let i = 2; i >= 0; i--){
+    let s = M[i][3];
+    for (let j = i+1; j < 3; j++) s -= M[i][j] * x[j];
+    x[i] = s / M[i][i];
+  }
+  return x;
+}
+
+function pasAan(){
+  if (punten.length < 3) return melden('Er zijn minstens 3 punten nodig', 'warn');
+  const lat0 = P.lat, lon0 = P.lon, k = mLon(lat0);
+  const rijen = punten.map(pt => ({
+    U: pt.u - .5, V: .5 - pt.v,
+    E: (pt.lon - lon0) * k, N: (pt.lat - lat0) * M_LAT
+  }));
+  const normaal = doel => {
+    const A = [[0,0,0],[0,0,0],[0,0,0]], b = [0,0,0];
+    for (const r of rijen){
+      const x = [r.U, r.V, 1], y = doel(r);
+      for (let i = 0; i < 3; i++){
+        for (let j = 0; j < 3; j++) A[i][j] += x[i]*x[j];
+        b[i] += x[i]*y;
+      }
+    }
+    return los3(A, b);
+  };
+  const oost = normaal(r => r.E), noord = normaal(r => r.N);
+  if (!oost || !noord) return melden('De punten liggen te veel op één lijn', 'warn');
+  const [a, b_, E0] = oost, [c, d, N0] = noord;
+
+  // a,b,c,d is een volledige affiene afbeelding; onze plaatsing kent geen
+  // scheeftrekking, dus we lezen er breedte, hoogte en draaiing uit en
+  // melden hoeveel scheefheid er overblijft.
+  const graden = r => r * 180 / Math.PI;
+  const w = Math.hypot(a, c), h = Math.hypot(b_, d);
+  const hoek1 = graden(Math.atan2(-c, a)), hoek2 = graden(Math.atan2(b_, d));
+  let scheef = hoek1 - hoek2;
+  while (scheef > 180) scheef -= 360;
+  while (scheef < -180) scheef += 360;
+  const rot = hoek1 - scheef/2;
+
+  P = Object.assign({}, P, { lat: lat0 + N0/M_LAT, lon: lon0 + E0/k, w, h, rot });
+  verhouding = P.w / P.h;
+  teken(); bewaar(); tekenPunten();
+
+  // restafwijking per punt, in meter
+  const rest = punten.map(pt => {
+    const op = naarLatLng([pt.u, pt.v]);
+    return Math.hypot((pt.lon - op.lng) * k, (pt.lat - op.lat) * M_LAT);
+  });
+  const rms = Math.sqrt(rest.reduce((s,v) => s + v*v, 0) / rest.length);
+  const ergst = Math.max(...rest);
+  document.getElementById('passing').textContent =
+    `passing over ${punten.length} punten — gemiddeld ${rms.toFixed(1)} m, grootste ${ergst.toFixed(1)} m` +
+    `\nbreedte ${w.toFixed(1)} m, hoogte ${h.toFixed(1)} m, draaiing ${rot.toFixed(2)}°` +
+    `\nscheeftrekking ${scheef.toFixed(2)}°` +
+    (Math.abs(scheef) > 1 || rms > 12
+      ? '\n\nDit past niet met verschuiven, schalen en draaien alleen. De tekening\nis dan getekend en niet ingemeten; leg ze goed in de zone waar je het\nvaakst staat, of laat de vectorlaag rubbersheeten bij het bouwen.'
+      : '\n\nHet plan past als een gewone verschuiving met schaal en draaiing.');
+  melden(`Gepast: gemiddeld ${rms.toFixed(1)} m afwijking`, rms > 12 ? 'warn' : '');
+}
+
+document.getElementById('btnPrik').onclick = e => {
+  prikken = !prikken; halve = null;
+  e.target.setAttribute('aria-pressed', prikken);
+  e.target.textContent = prikken ? 'stop met prikken' : 'punten prikken';
+  document.getElementById('align').classList.toggle('klein', prikken);
+  melden(prikken ? 'Tik een herkenbare plek op de tekening' : 'uitlijnen');
+  tekenPunten();
+};
+document.getElementById('btnPas').onclick = pasAan;
+document.getElementById('btnWisPunt').onclick = () => {
+  if (!punten.length) return;
+  punten.pop(); halve = null; bewaarPunten(); tekenPunten();
+  melden('Laatste punt weg — ' + punten.length + ' over');
+};
+
+const vorigNaTekenen = naTekenen;
+naTekenen = () => { vorigNaTekenen(); tekenPunten(); };
+tekenPunten();
+
+</script>
+</body>
+</html>

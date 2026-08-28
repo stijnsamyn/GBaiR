@@ -11,7 +11,12 @@ staan in geen enkele kaartdienst — vandaar deze pagina.
 
 | Bestand | Wat het doet |
 |---|---|
-| `index.html` | de hele toepassing; bovenaan staat `START`, de plaatsing van de kaart |
+| `index.html` | de kaartpagina: positie, zoeken, straatnamen |
+| `instellingen.html` | de kaart op de aarde leggen — uitlijnen en controlepunten |
+| `kaartkern.js` | wat beide pagina's delen: plaatsing, ontsleutelen, vectorlaag |
+| `stijl.css` | de opmaak van beide pagina's |
+| `plaatsing.json` | waar de kaart ligt, met een versienummer |
+| `zet-plaatsing.sh` | publiceert een nieuwe uitlijning voor iedereen |
 | `kaart.enc` | de versleutelde plattegrond, als beeld |
 | `plan.enc` | de versleutelde **vectorlaag**: straten, gebouwen en zones als kaartdata |
 | `maak-kaart.sh` | PDF → 400 dpi → bijsnijden → webp → versleutelen |
@@ -108,28 +113,81 @@ opnieuw: `vectorplan/blad2.py` maakt contactbladen van alle uitsneden.
 
 ## De kaart uitlijnen
 
-Dit vervangt de hele QGIS-stap. Er is geen georeferencer nodig.
+Dat gebeurt op een eigen pagina, **`instellingen.html`** — vanaf de kaart
+bereikbaar met **⚙** rechtsonder. Er is geen QGIS of georeferencer nodig.
 
-1. Open de pagina, tik rechtsonder op **⊹**.
-2. Kies rechtsboven **Luchtfoto** als achtergrond.
-3. Sleep de blauwe greep naar het midden van het terrein.
-4. Stem bij met de pijltjes, `+`/`−` (grootte) en `↺`/`↻` (draaiing).
-   Met **stap: fijn** ga je van 10 m naar 1 m, van 2 % naar 0,2 %,
-   van 1° naar 0,1°.
-5. Tik **kopieer** en plak het blok in `index.html` bij `const START`.
+### Eén keer uitlijnen, en het geldt voor iedereen
 
-Zolang je dat laatste niet doet, staat de correctie alleen in de
-`localStorage` van jouw toestel. Plak je hem in het bestand, dan klopt het
-meteen voor iedereen die de pagina opent.
+De plaatsing staat niet meer in `index.html` maar in **`plaatsing.json`**, met
+een versienummer erbij:
 
-Herkenbare ankerpunten op de luchtfoto: het voetbalveld linksonder op het
-plan, de langgerekte ovale structuur rechtsboven, en de toegangsweg
-("Ingang") links.
+```json
+{ "versie": 1, "lat": 51.1862115, "lon": 4.2085574,
+  "w": 1006, "h": 912, "rot": 0, "opmerking": "…" }
+```
+
+Dat versienummer is de kern. Wie op zijn eigen toestel bijstelt, krijgt die
+bijstelling bewaard **mét de versie waarop ze gebaseerd is**. Publiceer je een
+hoger nummer, dan laat elk toestel bij het volgende openen zijn eigen waarde
+los en neemt de jouwe over. Zonder dat mechanisme zou wie ooit één keer
+geschoven heeft voor altijd op zijn eigen plaatsing blijven hangen, en zou een
+nieuwe uitlijning hem nooit bereiken.
+
+Publiceren:
+
+```bash
+pbpaste | ./zet-plaatsing.sh      # het blok uit "kopieer" staat op het klembord
+```
+
+Dat controleert de inhoud, weigert een versie die niet hoger ligt dan de
+gepubliceerde, en commit en pusht.
+
+### Met de hand bijstellen
+
+Sleep de blauwe greep naar het midden van het terrein en stem bij met de
+pijltjes, `+`/`−` (grootte) en `↺`/`↻` (draaiing). Met **stap: fijn** ga je van
+10 m naar 1 m, van 2 % naar 0,2 %, van 1° naar 0,1°.
+
+Herkenbare ankerpunten op de luchtfoto: het voetbalveld linksonder op het plan,
+de langgerekte ovale structuur rechtsboven, en de toegangsweg ("Ingang") links.
+
+### Met controlepunten
+
+Nauwkeuriger dan met de hand schuiven, en het beantwoordt meteen de vraag of
+het plan überhaupt kán passen.
+
+1. Tik **punten prikken**. Het paneel klapt in zodat je de kaart ziet.
+2. Tik een herkenbare plek **op de tekening**, dan diezelfde plek **op de
+   luchtfoto**. Er verschijnt een blauw en een oranje punt met een stippellijn
+   ertussen.
+3. Herhaal dat drie tot zes keer, verspreid over het terrein — niet op één lijn.
+4. Tik **bereken passing**.
+
+De plek op de tekening wordt bewaard als plancoördinaat (0–1), niet als
+lengte- en breedtegraad. Anders zou hij meeschuiven zodra de passing de kaart
+verlegt, en dat is juist wat we meten. De punten blijven op je toestel staan,
+ook na sluiten.
+
+De passing lost de best passende affiene afbeelding op en leest daar breedte,
+hoogte en draaiing uit. Ze meldt drie dingen:
+
+| | wat het betekent |
+|---|---|
+| gemiddelde afwijking | hoe goed het past, in meter |
+| grootste afwijking | waar het het slechtst past |
+| scheeftrekking | hoeveel de affiene afbeelding scheeftrekt |
+
+Blijft de scheeftrekking onder ~1° en de gemiddelde afwijking onder ~12 m, dan
+is het plan gewoon verschoven, geschaald en gedraaid, en klopt de plaatsing
+overal. Zit je erboven, dan is de tekening getekend en niet ingemeten — dan
+gaat **geen enkele** lineaire plaatsing overal tegelijk passen. Leg ze dan goed
+in de zone waar je het vaakst staat, of laat de vectorlaag rubbersheeten bij
+het bouwen.
 
 ### Startwaarden
 
-`START` staat nu op het volledige militaire domein volgens OpenStreetMap
-(way 51686418, `landuse=military`):
+Zolang er niet ingemeten is, staat de plaatsing op het volledige militaire
+domein volgens OpenStreetMap (way 51686418, `landuse=military`):
 
 ```
 lat 51,1819896 – 51,1904335   (940 m)
@@ -137,15 +195,6 @@ lon 4,2013514  – 4,2157634    (1006 m)
 ```
 
 Dat is een startpunt, geen meting.
-
-### Klopt het plan niet overal tegelijk?
-
-Meet twee afstanden die ver uit elkaar liggen — de lengte van het
-voetbalveld en die van de ovale structuur — en vergelijk de verhouding met
-de luchtfoto. Klopt die niet, dan is het plan getekend en niet gemeten, en
-gaat geen enkele lineaire plaatsing overal tegelijk passen. Leg het dan
-goed in de zone waar je het vaakst staat en aanvaard afwijking aan de
-randen.
 
 ## Bij een nieuwe versie van het plan
 

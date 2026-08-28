@@ -6,6 +6,7 @@
 <meta name="robots" content="noindex,nofollow,noarchive">
 <meta name="theme-color" content="#12263a">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="WTC">
 <title>WTC — straatnamen</title>
@@ -13,94 +14,9 @@
 <link rel="apple-touch-icon" href="icons/icon-180.png">
 <link rel="icon" href="icons/icon-192.png">
 <link rel="stylesheet" href="vendor/leaflet.css">
-<style>
-  :root{ --ink:#12263a; --pill:rgba(255,255,255,.94); --line:#c3ccd6; --accent:#1e7bff; }
-  *{box-sizing:border-box}
-  html,body{margin:0;height:100%;background:#e9edf1;overscroll-behavior:none;
-            font:13px/1.35 -apple-system,BlinkMacSystemFont,system-ui,sans-serif;color:var(--ink)}
-  #map{position:absolute;inset:0}
-  .pill{background:var(--pill);border:1px solid var(--line);border-radius:12px;
-        box-shadow:0 2px 10px rgba(0,0,0,.18)}
-
-  /* ------------------------------- slot ------------------------------- */
-  #slot{position:absolute;inset:0;z-index:2000;background:#12263a;color:#fff;
-        display:flex;align-items:center;justify-content:center;padding:24px}
-  #slot.weg{display:none}
-  #slot .kaartje{width:100%;max-width:300px;text-align:center}
-  #slot img{width:64px;height:64px;border-radius:14px;margin-bottom:14px}
-  #slot h1{font-size:17px;margin:0 0 4px;font-weight:600}
-  #slot p{font-size:13px;margin:0 0 18px;opacity:.62;line-height:1.45}
-  #slot input{width:100%;height:46px;padding:0 14px;font-size:17px;text-align:center;
-              border:1px solid #34506e;border-radius:11px;background:#1b3550;color:#fff}
-  #slot button{width:100%;height:46px;margin-top:10px;font-size:15px;font-weight:600;
-               border:0;border-radius:11px;background:var(--accent);color:#fff;cursor:pointer}
-  #slot button:disabled{opacity:.5;cursor:default}
-  #slotfout{min-height:18px;margin-top:10px;font-size:12.5px;color:#ff9d9d}
-
-  /* ------------------------------ bediening --------------------------- */
-  #status{position:absolute;z-index:900;left:max(10px,env(safe-area-inset-left));
-          top:calc(max(10px,env(safe-area-inset-top)) + 42px);
-          padding:7px 11px;font-variant-numeric:tabular-nums}
-  #status.warn{background:#fff4e2;border-color:#e8b877}
-  #status.err {background:#ffe9e9;border-color:#e09a9a}
-
-  #tools{position:absolute;z-index:900;right:max(10px,env(safe-area-inset-right));
-         bottom:max(16px,env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:8px}
-  #tools button{width:46px;height:46px;font-size:20px;line-height:1;cursor:pointer;
-                background:var(--pill);border:1px solid var(--line);border-radius:12px;
-                box-shadow:0 2px 10px rgba(0,0,0,.18);color:var(--ink)}
-  #tools button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:#fff}
-
-  #fade{position:absolute;z-index:900;left:max(10px,env(safe-area-inset-left));
-        bottom:max(16px,env(safe-area-inset-bottom));padding:8px 12px;width:172px}
-  #fade label{display:block;font-size:11px;letter-spacing:.03em;text-transform:uppercase;
-              opacity:.65;margin-bottom:3px}
-  #fade input{width:100%;margin:0;accent-color:var(--accent)}
-
-  #align{position:absolute;z-index:1000;inset:auto 0 0 0;display:none;
-         padding:12px 14px calc(14px + env(safe-area-inset-bottom));
-         border-radius:16px 16px 0 0;border-bottom:0;max-height:72vh;overflow:auto}
-  #align.on{display:block}
-  #align h2{margin:0 0 2px;font-size:14px}
-  #align p.sub{margin:0 0 10px;font-size:12px;opacity:.7}
-  .grid{display:grid;grid-template-columns:repeat(3,44px);gap:6px;justify-content:center;margin:8px 0}
-  .row{display:flex;gap:6px;align-items:center;justify-content:center;flex-wrap:wrap;margin:8px 0}
-  #align button{min-width:44px;height:40px;font-size:16px;cursor:pointer;
-                background:#fff;border:1px solid var(--line);border-radius:10px;color:var(--ink)}
-  #align button.wide{padding:0 14px;font-size:13px}
-  #align button[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:#fff}
-  #readout{font:11.5px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;background:#f4f6f8;
-           border:1px solid var(--line);border-radius:10px;padding:8px 10px;margin-top:8px;
-           white-space:pre;overflow-x:auto;-webkit-user-select:all;user-select:all}
-  .note{font-size:11.5px;opacity:.7;margin-top:8px}
-  .leaflet-container{background:#e9edf1}
-  .leaflet-top.leaflet-left{margin-top:78px}
-  .leaflet-top.leaflet-right{margin-top:42px}
-
-  /* ---------------------------- vectorlaag ---------------------------- */
-  .leaflet-div-icon.etiket{background:none;border:0;margin:0!important;
-          width:0!important;height:0!important;overflow:visible}
-  .etiket span{position:absolute;transform:translate(-50%,-50%);
-          font-weight:600;white-space:nowrap;pointer-events:none;
-          text-shadow:0 0 3px #fff,0 0 3px #fff,0 0 3px #fff,0 0 5px #fff}
-  .etiket.straat span{font-size:12px;color:#0b4da2}
-  .etiket.code span{font-size:10.5px;color:#2b3540}
-
-  /* ------------------------------- zoeken ------------------------------ */
-  #zoek{position:absolute;z-index:1100;top:max(10px,env(safe-area-inset-top));
-        left:max(10px,env(safe-area-inset-left));right:max(56px,env(safe-area-inset-right))}
-  #zoekveld{width:100%;height:34px;padding:0 12px;font-size:14px;color:var(--ink);
-            background:var(--pill);border:1px solid var(--line);border-radius:12px;
-            box-shadow:0 2px 10px rgba(0,0,0,.18)}
-  #treffers{list-style:none;margin:6px 0 0;padding:4px;max-height:46vh;overflow:auto;display:none}
-  #treffers.on{display:block}
-  #treffers li{padding:8px 10px;border-radius:8px;cursor:pointer;font-size:13.5px}
-  #treffers li:hover,#treffers li:focus{background:#eaf1fb;outline:none}
-  #treffers li .bij{opacity:.55;font-size:11.5px;margin-left:6px}
-</style>
+<link rel="stylesheet" href="stijl.css">
 </head>
 <body>
-
 <div id="map"></div>
 <div id="status" class="pill">GPS zoeken…</div>
 
@@ -118,35 +34,7 @@
 <div id="tools">
   <button id="btnFollow" aria-pressed="false" title="Volg mijn positie">◎</button>
   <button id="btnWake"   aria-pressed="false" title="Scherm aan houden">☀</button>
-  <button id="btnAlign"  aria-pressed="false" title="Kaart uitlijnen">⊹</button>
-</div>
-
-<div id="align" class="pill">
-  <h2>Kaart uitlijnen</h2>
-  <p class="sub">Zet de luchtfoto eronder (laagjes rechtsboven), sleep de blauwe greep naar het midden van het terrein en stem bij. Wordt op dit toestel bewaard.</p>
-
-  <div class="grid">
-    <span></span><button data-a="n">↑</button><span></span>
-    <button data-a="w">←</button><button data-a="rst" title="Terug naar beginwaarden">⟲</button><button data-a="e">→</button>
-    <span></span><button data-a="s">↓</button><span></span>
-  </div>
-
-  <div class="row">
-    <span style="font-size:12px;opacity:.7">grootte</span>
-    <button data-a="-">−</button><button data-a="+">+</button>
-    <span style="font-size:12px;opacity:.7;margin-left:8px">draaien</span>
-    <button data-a="ccw">↺</button><button data-a="cw">↻</button>
-  </div>
-
-  <div class="row">
-    <button class="wide" id="btnStep" aria-pressed="false">stap: grof</button>
-    <button class="wide" id="btnLock" aria-pressed="true">verhouding vast</button>
-    <button class="wide" id="btnCopy">kopieer</button>
-    <button class="wide" id="btnClose">klaar</button>
-  </div>
-
-  <div id="readout"></div>
-  <p class="note">Plak het blok hierboven in <code>index.html</code> bij <code>const START</code>, dan is het meteen goed voor iedereen die de pagina opent.</p>
+  <a class="knop" href="instellingen.html" title="Kaart uitlijnen">⚙</a>
 </div>
 
 <div id="slot">
@@ -164,175 +52,13 @@
 
 <script src="vendor/leaflet.js"></script>
 <script src="vendor/leaflet-imageoverlay-rotated.js"></script>
+<script src="kaartkern.js"></script>
 <script>
-/* ------------------------------------------------------------------ *
- * 1. De plaatsing van de kaart op de aarde.
- *    lat/lon = middelpunt, w/h = breedte/hoogte in meter, rot = graden
- *    met de klok mee. Vervang dit blok door wat "kopieer" je geeft.
- * ------------------------------------------------------------------ */
-const START = { lat: 51.1862115, lon: 4.2085574, w: 1006, h: 912, rot: 0 };
-
-const BESTAND = 'kaart.enc';   // gemaakt met: node versleutel.mjs kaart.webp <wachtwoord>
-const VECTOR  = 'plan.enc';    // gemaakt met: node versleutel.mjs plan.geojson <wachtwoord>
-const RONDES  = 600000;        // moet gelijk zijn aan versleutel.mjs
-/* ------------------------------------------------------------------ */
-
-const KEY = 'wtc_plaatsing_v1', SLEUTELKEY = 'wtc_ww_v1';
-const load = () => { try { return JSON.parse(localStorage.getItem(KEY)); } catch(e){ return null; } };
-let P = Object.assign({}, START, load() || {});
-
-/* --- meetkunde: middelpunt + afmeting + draaiing -> vier hoeken --- */
-const M_LAT = 111320;
-const mLon = lat => 111320 * Math.cos(lat * Math.PI/180);
-
-function hoeken(p){
-  const t = p.rot * Math.PI/180, c = Math.cos(t), s = Math.sin(t);
-  const draai = (x,y) => [x*c + y*s, -x*s + y*c];          // met de klok mee
-  const naarLatLng = ([oost,noord]) =>
-        L.latLng(p.lat + noord/M_LAT, p.lon + oost/mLon(p.lat));
-  const hw = p.w/2, hh = p.h/2;
-  return {
-    lb: naarLatLng(draai(-hw,  hh)),   // linksboven
-    rb: naarLatLng(draai( hw,  hh)),   // rechtsboven
-    lo: naarLatLng(draai(-hw, -hh)),   // linksonder
-    ro: naarLatLng(draai( hw, -hh))
-  };
-}
-
-/* --- kaart en achtergronden --- */
-const map = L.map('map', { zoomSnap:.25, zoomControl:false, maxZoom:22, attributionControl:true });
-L.control.zoom({ position:'topleft' }).addTo(map);
-map.attributionControl.setPrefix('');
-
-const lucht = L.tileLayer(
-  'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-  { maxZoom:22, maxNativeZoom:19, attribution:'Luchtfoto: Esri, Maxar' });
-const osm = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-  { maxZoom:22, maxNativeZoom:19, attribution:'&copy; OpenStreetMap' });
-const LEEG_TEGEL = 'data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==';
-const leeg = L.tileLayer(LEEG_TEGEL, { attribution:'' });
-
-const lagenkiezer = L.control.layers({ 'Geen achtergrond':leeg, 'Luchtfoto':lucht, 'OpenStreetMap':osm },
-                 null, { position:'topright', collapsed:true }).addTo(map);
-leeg.addTo(map);
-map.fitBounds(L.latLngBounds(Object.values(hoeken(P))).pad(.05));
-
-/* ------------------------------------------------------------------ *
- * 2. Ontsleutelen. Het bestand is AES-256-GCM, sleutel uit PBKDF2.
- *    Zonder het juiste wachtwoord komt er geen beeld uit — dit is geen
- *    schermpje dat je wegklikt.
- * ------------------------------------------------------------------ */
-const SOORTEN = { 1:'image/webp', 2:'image/png', 3:'image/jpeg', 4:'application/json' };
-
-async function ontsleutelRuw(bestand, wachtwoord){
-  const res = await fetch(bestand);
-  if (!res.ok) throw new Error('weg');
-  const b = new Uint8Array(await res.arrayBuffer());
-  if (b.length < 34 || String.fromCharCode(b[0],b[1],b[2],b[3]) !== 'WTC1') throw new Error('stuk');
-
-  const soort = SOORTEN[b[4]] || 'image/webp';
-  const salt = b.slice(5,21), iv = b.slice(21,33), data = b.slice(33);
-
-  const basis = await crypto.subtle.importKey(
-        'raw', new TextEncoder().encode(wachtwoord), 'PBKDF2', false, ['deriveKey']);
-  const sleutel = await crypto.subtle.deriveKey(
-        { name:'PBKDF2', salt, iterations:RONDES, hash:'SHA-256' }, basis,
-        { name:'AES-GCM', length:256 }, false, ['decrypt']);
-  const plat = await crypto.subtle.decrypt({ name:'AES-GCM', iv }, sleutel, data);
-
-  return { soort, plat };
-}
-
-async function ontsleutel(wachtwoord){
-  const { soort, plat } = await ontsleutelRuw(BESTAND, wachtwoord);
-  return URL.createObjectURL(new Blob([plat], { type:soort }));
-}
-
-// De vectorlaag is platte tekst zodra hij ontsleuteld is; hij zit achter
-// hetzelfde wachtwoord als het beeld. Ontbreekt hij, dan werkt de rest gewoon.
-async function ontsleutelVector(wachtwoord){
-  try {
-    const { plat } = await ontsleutelRuw(VECTOR, wachtwoord);
-    return JSON.parse(new TextDecoder().decode(plat));
-  } catch(e){ return null; }
-}
-
-const slot = document.getElementById('slot');
-const fout = document.getElementById('slotfout');
-const knop = document.getElementById('slotknop');
-const veld = document.getElementById('ww');
-
-async function probeer(wachtwoord, stil){
-  knop.disabled = true; fout.textContent = '';
-  if (!stil) knop.textContent = 'Ontgrendelen…';
-  await new Promise(r => setTimeout(r, 20));           // even laten tekenen
-  try {
-    const url = await ontsleutel(wachtwoord);
-    try { localStorage.setItem(SLEUTELKEY, wachtwoord); } catch(e){}
-    slot.classList.add('weg');
-    start(url);
-    ontsleutelVector(wachtwoord).then(bouwVector);
-    return true;
-  } catch(e){
-    try { localStorage.removeItem(SLEUTELKEY); } catch(err){}
-    fout.textContent = e.message === 'weg'  ? 'Bestand ' + BESTAND + ' niet gevonden.'
-                     : e.message === 'stuk' ? 'Bestand ' + BESTAND + ' is beschadigd.'
-                     : 'Wachtwoord klopt niet.';
-    knop.disabled = false; knop.textContent = 'Openen';
-    veld.value = ''; if (!stil) veld.focus();
-    return false;
-  }
-}
-
-document.getElementById('slotform').addEventListener('submit', e => {
-  e.preventDefault();
-  if (veld.value) probeer(veld.value.trim(), false);
-});
-
-if (!window.isSecureContext || !crypto.subtle){
-  fout.textContent = 'Vereist https. Open de pagina via GitHub Pages of localhost.';
-  knop.disabled = true;
-} else {
-  const bewaard = (() => { try { return localStorage.getItem(SLEUTELKEY); } catch(e){ return null; } })();
-  if (bewaard) probeer(bewaard, true).then(ok => { if (!ok) fout.textContent = ''; });
-  else setTimeout(() => veld.focus(), 300);
-}
-
-/* ------------------------------------------------------------------ *
- * 3. Vanaf hier draait alles pas als de kaart ontsleuteld is.
- * ------------------------------------------------------------------ */
-let overlay = null, verhouding = P.w / P.h, verhoudingVast = true;
-
-function start(url){
-  const h = hoeken(P);
-  overlay = L.imageOverlay.rotated(url, h.lb, h.rb, h.lo,
-              { opacity:+document.getElementById('op').value, interactive:false }).addTo(map);
-
-  const proef = new Image();                  // beeldverhouding uit het bestand
-  proef.onload = () => {
-    verhouding = proef.naturalWidth / proef.naturalHeight;
-    if (verhoudingVast && !load()){ P.h = P.w / verhouding; teken(); }
-  };
-  proef.src = url;
-
-  map.fitBounds(L.latLngBounds(Object.values(h)).pad(.05));
-  zoekGps();
-}
-
-function teken(){
-  const h = hoeken(P);
-  if (overlay) overlay.reposition(h.lb, h.rb, h.lo);
-  plaatsVector();
-  if (greep) greep.setLatLng([P.lat, P.lon]);
-  lees();
-}
-function bewaar(){ try { localStorage.setItem(KEY, JSON.stringify(P)); } catch(e){} }
-
-document.getElementById('op').oninput = e => { if (overlay) overlay.setOpacity(+e.target.value); };
+/* Kaartpagina: gps, scherm aanhouden, zoeken. De rest staat in kaartkern.js. */
 
 /* ------------------------------- GPS ------------------------------ */
 const statusEl = document.getElementById('status');
-const zeg = (t, k='') => { statusEl.textContent = t; statusEl.className = 'pill ' + k; };
+melden = (t, k='') => { statusEl.textContent = t; statusEl.className = 'pill ' + k; };
 
 let stip, ring, volgen = false, eerste = true;
 const btnFollow = document.getElementById('btnFollow');
@@ -341,7 +67,7 @@ map.on('locationfound', e => {
   const st = dichtsteStraat(e.latlng);
   const waar = st && st.afstand < 60
              ? (st.afstand < 18 ? ' · ' + st.naam : ' · bij ' + st.naam) : '';
-  zeg('GPS ±' + Math.round(e.accuracy) + ' m' + waar, e.accuracy > 25 ? 'warn' : '');
+  melden('GPS ±' + Math.round(e.accuracy) + ' m' + waar, e.accuracy > 25 ? 'warn' : '');
   if (!stip){
     ring = L.circle(e.latlng, { radius:e.accuracy, color:'#1e7bff', weight:1,
                                 fillColor:'#1e7bff', fillOpacity:.10 }).addTo(map);
@@ -353,7 +79,7 @@ map.on('locationfound', e => {
   if (eerste || volgen){ map.setView(e.latlng, eerste ? 18 : map.getZoom()); eerste = false; }
 });
 map.on('locationerror', e => {
-  zeg(window.isSecureContext ? 'Geen GPS: ' + e.message
+  melden(window.isSecureContext ? 'Geen GPS: ' + e.message
                              : 'GPS vereist https — open de pagina via GitHub Pages', 'err');
 });
 const zoekGps = () => map.locate({ watch:true, enableHighAccuracy:true, maximumAge:2000, timeout:20000 });
@@ -364,278 +90,20 @@ btnFollow.onclick = () => {
   if (volgen && stip) map.setView(stip.getLatLng(), Math.max(map.getZoom(), 18));
 };
 map.on('dragstart', () => { if (volgen){ volgen = false; btnFollow.setAttribute('aria-pressed', false); } });
-
 /* --------------------------- scherm aan --------------------------- */
 let wakeSlot = null;
 const btnWake = document.getElementById('btnWake');
 btnWake.onclick = async () => {
-  if (!('wakeLock' in navigator)) return zeg('Scherm aan houden kan niet op dit toestel', 'warn');
+  if (!('wakeLock' in navigator)) return melden('Scherm aan houden kan niet op dit toestel', 'warn');
   if (wakeSlot){ await wakeSlot.release(); wakeSlot = null; btnWake.setAttribute('aria-pressed', false); return; }
   try { wakeSlot = await navigator.wakeLock.request('screen'); btnWake.setAttribute('aria-pressed', true);
         wakeSlot.addEventListener('release', () => { wakeSlot = null; btnWake.setAttribute('aria-pressed', false); });
-  } catch(e){ zeg('Scherm aan houden geweigerd', 'warn'); }
+  } catch(e){ melden('Scherm aan houden geweigerd', 'warn'); }
 };
 document.addEventListener('visibilitychange', async () => {
   if (wakeSlot === null && btnWake.getAttribute('aria-pressed') === 'true' && document.visibilityState === 'visible')
     try { wakeSlot = await navigator.wakeLock.request('screen'); } catch(e){}
 });
-
-/* ---------------------------- uitlijnen --------------------------- */
-const paneel = document.getElementById('align');
-const btnAlign = document.getElementById('btnAlign');
-const btnStep = document.getElementById('btnStep');
-const btnLock = document.getElementById('btnLock');
-let fijn = false, greep = null;
-
-function wisselUitlijnen(){
-  const aan = !paneel.classList.contains('on');
-  paneel.classList.toggle('on', aan);
-  btnAlign.setAttribute('aria-pressed', aan);
-  if (aan){
-    if (!map.hasLayer(lucht) && !map.hasLayer(osm)){ map.removeLayer(leeg); lucht.addTo(map); }
-    if (overlay && overlay.options.opacity > .8){
-      overlay.setOpacity(.65); document.getElementById('op').value = .65;
-    }
-    greep = L.marker([P.lat, P.lon], { draggable:true, autoPan:true,
-              title:'Sleep om de kaart te verplaatsen' }).addTo(map);
-    greep.on('drag dragend', ev => {
-      const ll = ev.target.getLatLng(); P.lat = ll.lat; P.lon = ll.lng;
-      if (overlay){ const h = hoeken(P); overlay.reposition(h.lb, h.rb, h.lo); }
-      lees();
-      if (ev.type === 'dragend') bewaar();
-    });
-    lees();
-  } else if (greep){ map.removeLayer(greep); greep = null; }
-}
-btnAlign.onclick = wisselUitlijnen;
-document.getElementById('btnClose').onclick = wisselUitlijnen;
-
-btnStep.onclick = () => { fijn = !fijn; btnStep.setAttribute('aria-pressed', fijn);
-                          btnStep.textContent = 'stap: ' + (fijn ? 'fijn' : 'grof'); };
-btnLock.onclick = () => { verhoudingVast = !verhoudingVast;
-                          btnLock.setAttribute('aria-pressed', verhoudingVast);
-                          btnLock.textContent = verhoudingVast ? 'verhouding vast' : 'verhouding vrij'; };
-
-document.querySelectorAll('#align button[data-a]').forEach(b => {
-  b.onclick = () => {
-    const m   = fijn ? 1    : 10;    // meter
-    const pct = fijn ? .002 : .02;   // schaal
-    const gr  = fijn ? .1   : 1;     // graden
-    switch (b.dataset.a){
-      case 'n': P.lat += m / M_LAT; break;
-      case 's': P.lat -= m / M_LAT; break;
-      case 'e': P.lon += m / mLon(P.lat); break;
-      case 'w': P.lon -= m / mLon(P.lat); break;
-      case '+': P.w *= 1+pct; P.h = verhoudingVast ? P.w/verhouding : P.h*(1+pct); break;
-      case '-': P.w *= 1-pct; P.h = verhoudingVast ? P.w/verhouding : P.h*(1-pct); break;
-      case 'cw':  P.rot += gr; break;
-      case 'ccw': P.rot -= gr; break;
-      case 'rst': P = Object.assign({}, START); localStorage.removeItem(KEY); break;
-    }
-    teken(); if (b.dataset.a !== 'rst') bewaar();
-  };
-});
-
-function lees(){
-  const h = hoeken(P), n = (v,d) => (+v).toFixed(d);
-  let t = 'const START = { lat: ' + n(P.lat,7) + ', lon: ' + n(P.lon,7) +
-          ',\n                w: ' + n(P.w,1) + ', h: ' + n(P.h,1) +
-          ', rot: ' + n(P.rot,2) + ' };\n\n' +
-          '// hoeken  lb ' + n(h.lb.lat,6) + ', ' + n(h.lb.lng,6) +
-          '\n//         rb ' + n(h.rb.lat,6) + ', ' + n(h.rb.lng,6) +
-          '\n//         lo ' + n(h.lo.lat,6) + ', ' + n(h.lo.lng,6) +
-          '\n//         ro ' + n(h.ro.lat,6) + ', ' + n(h.ro.lng,6);
-  if (Math.abs(P.rot) < .01){
-    t += '\n\n// zonder draaiing, dus ook bruikbaar als L.imageOverlay bounds:' +
-         '\n// [[' + n(h.lo.lat,6) + ', ' + n(h.lb.lng,6) + '], [' +
-                     n(h.lb.lat,6) + ', ' + n(h.rb.lng,6) + ']]';
-  }
-  document.getElementById('readout').textContent = t;
-}
-
-document.getElementById('btnCopy').onclick = async () => {
-  try { await navigator.clipboard.writeText(document.getElementById('readout').textContent);
-        zeg('Gekopieerd naar klembord'); }
-  catch(e){ zeg('Kopiëren lukt niet — selecteer het blok zelf', 'warn'); }
-};
-
-
-/* ------------------------------------------------------------------ *
- * 4. De vectorlaag: straten, gebouwen en zones als echte kaartdata.
- *    De coördinaten in plan.enc lopen van 0 tot 1 over het kader van
- *    de plattegrond, dus dezelfde START-plaatsing geldt voor allebei.
- * ------------------------------------------------------------------ */
-let plan = null;                                   // de ontsleutelde GeoJSON
-const doek = L.canvas({ padding:.4 });
-const gZone   = L.layerGroup(), gVlak = L.layerGroup(), gLijn = L.layerGroup(),
-      gStraat = L.layerGroup(), gCode = L.layerGroup();
-const vormen = [];                                 // {laag, uv} om te herplaatsen
-const etiketten = [];                              // {marker, uv}
-let straten = [];                                  // {naam, delen:[[a,b],…]} in meters
-const straatEtiket = [];                           // om per zoomstand te tonen of te verbergen
-const CODE_VANAF = 18;      // gebouwcodes pas van dichtbij
-const NAAM_VANAF = 16;      // van hieraf één naam per straat
-const ALLE_VANAF = 17.5;    // van hieraf elk naambordje
-
-/* genormaliseerde plancoördinaat -> plaatselijke meters (oost, noord), vóór draaiing */
-const naarMeter = ([u,v]) => [ (u - .5) * P.w, (.5 - v) * P.h ];
-
-function naarLatLng([u,v]){
-  const t = P.rot * Math.PI/180, c = Math.cos(t), s = Math.sin(t);
-  const [x,y] = naarMeter([u,v]);
-  return L.latLng(P.lat + (-x*s + y*c)/M_LAT, P.lon + (x*c + y*s)/mLon(P.lat));
-}
-
-/* omgekeerd: een gps-punt terug naar het vlakke meterstelsel van het plan */
-function naarVlak(ll){
-  const oost  = (ll.lng - P.lon) * mLon(P.lat);
-  const noord = (ll.lat - P.lat) * M_LAT;
-  const t = -P.rot * Math.PI/180, c = Math.cos(t), s = Math.sin(t);
-  return [ oost*c + noord*s, -oost*s + noord*c ];
-}
-
-const STIJL = {
-  zone:      { color:'#d9534f', weight:1,   fillColor:'#d9534f', fillOpacity:.10 },
-  gebouw:    { color:'#46525f', weight:1,   fillColor:'#8d99a6', fillOpacity:.60 },
-  bijgebouw: { color:'#6e7984', weight:.8,  fillColor:'#c2cad2', fillOpacity:.50 },
-  straat:    { color:'#4a86d8', weight:2.5, opacity:.55 }
-};
-
-function bouwVector(data){
-  if (!data || !data.features) return;
-  plan = data;
-  const perStraat = {};
-
-  for (const k of data.features){
-    const s = k.properties.soort, g = k.geometry;
-
-    if (g.type === 'Polygon'){
-      const uv = g.coordinates[0];
-      const laag = L.polygon(uv.map(naarLatLng),
-                     Object.assign({ renderer:doek, interactive:s !== 'zone' }, STIJL[s] || STIJL.gebouw));
-      if (k.properties.code) laag.bindTooltip(k.properties.code, { direction:'top' });
-      laag.addTo(s === 'zone' ? gZone : gVlak);
-      vormen.push({ laag, uv, ring:true });
-      if (k.properties.code){
-        const m = zwaartepunt(uv);
-        etiketten.push(voegEtiket(m, k.properties.code, 'code', gCode));
-      }
-
-    } else if (g.type === 'LineString'){
-      const uv = g.coordinates;
-      const laag = L.polyline(uv.map(naarLatLng), Object.assign({ renderer:doek }, STIJL.straat)).addTo(gLijn);
-      vormen.push({ laag, uv, ring:false });
-      const naam = k.properties.naam;
-      (perStraat[naam] = perStraat[naam] || []).push(uv);
-      const e = voegEtiket(midden(uv), naam, 'straat', gStraat);
-      e.naam = naam; e.lengte = stukLengte(uv);
-      etiketten.push(e); straatEtiket.push(e);
-
-    } else if (g.type === 'Point'){
-      etiketten.push(voegEtiket(g.coordinates, k.properties.code, 'code', gCode));
-    }
-  }
-
-  straten = Object.entries(perStraat).map(([naam, delen]) => ({ naam, delen }));
-  straten.sort((a,b) => a.naam.localeCompare(b.naam, 'nl'));
-
-  // per straat draagt het langste stuk de naam die als eerste verschijnt
-  const langste = {};
-  for (const e of straatEtiket)
-    if (!langste[e.naam] || e.lengte > langste[e.naam].lengte) langste[e.naam] = e;
-  for (const e of straatEtiket) e.hoofd = (langste[e.naam] === e);
-  straatEtiket.sort((a,b) => (b.hoofd - a.hoofd) || (b.lengte - a.lengte));
-
-  gZone.addTo(map); gVlak.addTo(map); gLijn.addTo(map); gStraat.addTo(map);
-  lagenkiezer.addOverlay(gZone,   'Zones');
-  lagenkiezer.addOverlay(gVlak,   'Gebouwen');
-  lagenkiezer.addOverlay(gLijn,   'Straten');
-  lagenkiezer.addOverlay(gStraat, 'Straatnamen');
-  lagenkiezer.addOverlay(gCode,   'Gebouwcodes');
-  // De vectorlaag draagt de namen nu zelf; de plattegrond eronder zou ze
-  // een tweede keer tonen. Hij blijft één tik ver, via het lagenknopje.
-  if (overlay){ lagenkiezer.addOverlay(overlay, 'Plattegrond'); map.removeLayer(overlay); }
-  regelZoom();
-  vulLijst('');
-  zeg(straten.length + ' straten geladen');
-}
-
-function voegEtiket(uv, tekst, soort, groep){
-  const m = L.marker(naarLatLng(uv), { interactive:false, keyboard:false,
-              icon: L.divIcon({ className:'etiket ' + soort, iconSize:[0,0],
-                                html:'<span>' + ontsmet(tekst) + '</span>' }) }).addTo(groep);
-  return { marker:m, uv };
-}
-const ontsmet = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-
-function zwaartepunt(ring){
-  let x = 0, y = 0;
-  for (const [u,v] of ring){ x += u; y += v; }
-  return [x/ring.length, y/ring.length];
-}
-const midden = uv => [ (uv[0][0] + uv[uv.length-1][0])/2, (uv[0][1] + uv[uv.length-1][1])/2 ];
-
-function stukLengte(uv){                           // in meter, over het hele lijnstuk
-  let s = 0;
-  for (let i = 0; i < uv.length-1; i++){
-    const a = naarMeter(uv[i]), b = naarMeter(uv[i+1]);
-    s += Math.hypot(b[0]-a[0], b[1]-a[1]);
-  }
-  return s;
-}
-
-/* de plaatsing is veranderd (uitlijnen) — alles opnieuw op de aarde zetten */
-function plaatsVector(){
-  for (const v of vormen)
-    v.laag.setLatLngs(v.ring ? [v.uv.map(naarLatLng)] : v.uv.map(naarLatLng));
-  for (const e of etiketten) e.marker.setLatLng(naarLatLng(e.uv));
-}
-
-/* Van ver zijn 91 naambordjes één zwarte vlek. Van dichtbij mag alles.
-   Daartussen: één naam per straat, op zijn langste stuk. */
-function regelZoom(){
-  const z = map.getZoom();
-  const codes = z >= CODE_VANAF;
-  if (codes && !map.hasLayer(gCode)) gCode.addTo(map);
-  if (!codes && map.hasLayer(gCode)) map.removeLayer(gCode);
-
-  // dezelfde naam twee keer vlak naast elkaar helpt niemand
-  const gehouden = [];
-  for (const e of straatEtiket){
-    let wil = z >= ALLE_VANAF || (z >= NAAM_VANAF && e.hoofd);
-    if (wil && !e.hoofd){
-      const q = map.latLngToContainerPoint(e.marker.getLatLng());
-      for (const g of gehouden)
-        if (g.naam === e.naam && q.distanceTo(g.punt) < 150){ wil = false; break; }
-    }
-    if (wil) gehouden.push({ naam:e.naam, punt:map.latLngToContainerPoint(e.marker.getLatLng()) });
-    if (wil && !gStraat.hasLayer(e.marker)) gStraat.addLayer(e.marker);
-    if (!wil && gStraat.hasLayer(e.marker)) gStraat.removeLayer(e.marker);
-  }
-}
-map.on('zoomend moveend', regelZoom);
-
-/* ------------------------- in welke straat sta ik ------------------- */
-function afstandTotStuk(p, a, b){
-  const dx = b[0]-a[0], dy = b[1]-a[1], L2 = dx*dx + dy*dy;
-  let t = L2 ? ((p[0]-a[0])*dx + (p[1]-a[1])*dy) / L2 : 0;
-  t = Math.max(0, Math.min(1, t));
-  return Math.hypot(p[0] - (a[0]+t*dx), p[1] - (a[1]+t*dy));
-}
-
-function dichtsteStraat(ll){
-  if (!straten.length) return null;
-  const p = naarVlak(ll);
-  let best = null, bestd = Infinity;
-  for (const s of straten)
-    for (const deel of s.delen)
-      for (let i = 0; i < deel.length-1; i++){
-        const d = afstandTotStuk(p, naarMeter(deel[i]), naarMeter(deel[i+1]));
-        if (d < bestd){ bestd = d; best = s.naam; }
-      }
-  return { naam:best, afstand:bestd };
-}
-
 /* ------------------------------- zoeken ----------------------------- */
 const zoekveld = document.getElementById('zoekveld');
 const treffers = document.getElementById('treffers');
@@ -685,10 +153,9 @@ zoekveld.addEventListener('keydown', e => {
 document.addEventListener('click', e => {
   if (!document.getElementById('zoek').contains(e.target)) treffers.classList.remove('on');
 });
+naOntsleutelen = zoekGps;
+naVector = () => vulLijst('');
 
-/* -------------------------- offline cache ------------------------- */
-if ('serviceWorker' in navigator && location.protocol === 'https:')
-  navigator.serviceWorker.register('sw.js').catch(()=>{});
 </script>
 </body>
 </html>

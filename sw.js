@@ -1,12 +1,13 @@
 /* Offline cache. Verhoog VERSIE na elke wijziging, anders blijft een
    toestel op de oude pagina hangen. */
-const VERSIE = 'wtc-v2';
+const VERSIE = 'wtc-v3';
 const SCHIL  = 'schil-'  + VERSIE;
 const TEGELS = 'tegels-' + VERSIE;
 const MAX_TEGELS = 900;
 
 const BESTANDEN = [
-  '.', 'index.html', 'manifest.webmanifest',
+  '.', 'index.html', 'instellingen.html', 'manifest.webmanifest',
+  'stijl.css', 'kaartkern.js', 'plaatsing.json',
   'kaart.enc', 'plan.enc',
   'vendor/leaflet.css', 'vendor/leaflet.js', 'vendor/leaflet-imageoverlay-rotated.js',
   'vendor/images/layers.png', 'vendor/images/layers-2x.png',
@@ -54,6 +55,21 @@ self.addEventListener('fetch', e => {
   }
 
   if (new URL(req.url).origin !== location.origin) return;
+
+  // De plaatsing moet meteen doorkomen als ze opnieuw uitgelijnd is; daarom
+  // eerst het netwerk, en de cache alleen als reserve. Bij de rest is het
+  // andersom, want die verandert alleen bij een nieuwe versie.
+  if (new URL(req.url).pathname.endsWith('/plaatsing.json')){
+    e.respondWith((async () => {
+      const c = await caches.open(SCHIL);
+      try {
+        const res = await fetch(req, { cache:'no-store' });
+        if (res.ok) c.put(req, res.clone());
+        return res;
+      } catch(err){ return (await c.match(req)) || new Response('{}', { status:200 }); }
+    })());
+    return;
+  }
 
   // Eigen bestanden: cache eerst, netwerk als reserve, en ververs stil.
   e.respondWith((async () => {

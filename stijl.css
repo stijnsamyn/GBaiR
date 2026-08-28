@@ -1,0 +1,108 @@
+/* Gedeeld door index.html en instellingen.html. */
+  :root{ --ink:#12263a; --pill:rgba(255,255,255,.94); --line:#c3ccd6; --accent:#1e7bff; }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:#e9edf1;overscroll-behavior:none;
+            font:13px/1.35 -apple-system,BlinkMacSystemFont,system-ui,sans-serif;color:var(--ink)}
+  #map{position:absolute;inset:0}
+  .pill{background:var(--pill);border:1px solid var(--line);border-radius:12px;
+        box-shadow:0 2px 10px rgba(0,0,0,.18)}
+
+  /* ------------------------------- slot ------------------------------- */
+  #slot{position:absolute;inset:0;z-index:2000;background:#12263a;color:#fff;
+        display:flex;align-items:center;justify-content:center;padding:24px}
+  #slot.weg{display:none}
+  #slot .kaartje{width:100%;max-width:300px;text-align:center}
+  #slot img{width:64px;height:64px;border-radius:14px;margin-bottom:14px}
+  #slot h1{font-size:17px;margin:0 0 4px;font-weight:600}
+  #slot p{font-size:13px;margin:0 0 18px;opacity:.62;line-height:1.45}
+  #slot input{width:100%;height:46px;padding:0 14px;font-size:17px;text-align:center;
+              border:1px solid #34506e;border-radius:11px;background:#1b3550;color:#fff}
+  #slot button{width:100%;height:46px;margin-top:10px;font-size:15px;font-weight:600;
+               border:0;border-radius:11px;background:var(--accent);color:#fff;cursor:pointer}
+  #slot button:disabled{opacity:.5;cursor:default}
+  #slotfout{min-height:18px;margin-top:10px;font-size:12.5px;color:#ff9d9d}
+
+  /* ------------------------------ bediening --------------------------- */
+  #status{position:absolute;z-index:900;left:max(10px,env(safe-area-inset-left));
+          top:calc(max(10px,env(safe-area-inset-top)) + 42px);
+          padding:7px 11px;font-variant-numeric:tabular-nums}
+  #status.warn{background:#fff4e2;border-color:#e8b877}
+  #status.err {background:#ffe9e9;border-color:#e09a9a}
+
+  #tools{position:absolute;z-index:900;right:max(10px,env(safe-area-inset-right));
+         bottom:max(16px,env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:8px}
+  #tools button{width:46px;height:46px;font-size:20px;line-height:1;cursor:pointer;
+                background:var(--pill);border:1px solid var(--line);border-radius:12px;
+                box-shadow:0 2px 10px rgba(0,0,0,.18);color:var(--ink)}
+  #tools button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:#fff}
+
+  #fade{position:absolute;z-index:900;left:max(10px,env(safe-area-inset-left));
+        bottom:max(16px,env(safe-area-inset-bottom));padding:8px 12px;width:172px}
+  #fade label{display:block;font-size:11px;letter-spacing:.03em;text-transform:uppercase;
+              opacity:.65;margin-bottom:3px}
+  #fade input{width:100%;margin:0;accent-color:var(--accent)}
+
+  #align{position:absolute;z-index:1000;inset:auto 0 0 0;display:none;
+         padding:12px 14px calc(14px + env(safe-area-inset-bottom));
+         border-radius:16px 16px 0 0;border-bottom:0;max-height:64vh;overflow:auto}
+  #align.on{display:block}
+  #align h2{margin:0 0 2px;font-size:14px}
+  #align p.sub{margin:0 0 10px;font-size:12px;opacity:.7}
+  .grid{display:grid;grid-template-columns:repeat(3,44px);gap:6px;justify-content:center;margin:8px 0}
+  .row{display:flex;gap:6px;align-items:center;justify-content:center;flex-wrap:wrap;margin:8px 0}
+  #align button{min-width:44px;height:40px;font-size:16px;cursor:pointer;
+                background:#fff;border:1px solid var(--line);border-radius:10px;color:var(--ink)}
+  #align button.wide{padding:0 14px;font-size:13px}
+  #align button[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:#fff}
+  #readout{font:11.5px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;background:#f4f6f8;
+           border:1px solid var(--line);border-radius:10px;padding:8px 10px;margin-top:8px;
+           white-space:pre;overflow-x:auto;-webkit-user-select:all;user-select:all}
+  .note{font-size:11.5px;opacity:.7;margin-top:8px}
+  .leaflet-container{background:#e9edf1}
+  .leaflet-top.leaflet-left{margin-top:78px}
+  .leaflet-top.leaflet-right{margin-top:42px}
+
+  /* ---------------------------- vectorlaag ---------------------------- */
+  .leaflet-div-icon.etiket{background:none;border:0;margin:0!important;
+          width:0!important;height:0!important;overflow:visible}
+  .etiket span{position:absolute;transform:translate(-50%,-50%);
+          font-weight:600;white-space:nowrap;pointer-events:none;
+          text-shadow:0 0 3px #fff,0 0 3px #fff,0 0 3px #fff,0 0 5px #fff}
+  .etiket.straat span{font-size:12px;color:#0b4da2}
+  .etiket.code span{font-size:10.5px;color:#2b3540}
+
+  /* ------------------------------- zoeken ------------------------------ */
+  #zoek{position:absolute;z-index:1100;top:max(10px,env(safe-area-inset-top));
+        left:max(10px,env(safe-area-inset-left));right:max(56px,env(safe-area-inset-right))}
+  #zoekveld{width:100%;height:34px;padding:0 12px;font-size:14px;color:var(--ink);
+            background:var(--pill);border:1px solid var(--line);border-radius:12px;
+            box-shadow:0 2px 10px rgba(0,0,0,.18)}
+  #treffers{list-style:none;margin:6px 0 0;padding:4px;max-height:46vh;overflow:auto;display:none}
+  #treffers.on{display:block}
+  #treffers li{padding:8px 10px;border-radius:8px;cursor:pointer;font-size:13.5px}
+  #treffers li:hover,#treffers li:focus{background:#eaf1fb;outline:none}
+  #treffers li .bij{opacity:.55;font-size:11.5px;margin-left:6px}
+  /* ---------------------- instellingenpagina -------------------- */
+  #uitleg{margin:0 0 10px;font-size:12px;opacity:.75;line-height:1.5}
+  #uitleg code{background:#eef1f4;padding:1px 4px;border-radius:4px}
+  #versie{font-size:11.5px;opacity:.65;margin:6px 0 0}
+  a.knop{display:flex;align-items:center;justify-content:center;text-decoration:none}
+  #terug{position:absolute;z-index:900;left:max(10px,env(safe-area-inset-left));
+         top:max(10px,env(safe-area-inset-top));padding:7px 12px;text-decoration:none;color:var(--ink)}
+
+  #hoekenuit{font:11px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;opacity:.6;
+             white-space:pre;margin-top:6px;overflow-x:auto}
+  #blok summary{cursor:pointer;font-size:12px;opacity:.7;padding:4px 0;
+                list-style:none;display:flex;align-items:center;gap:6px}
+  #blok summary::before{content:'▸';font-size:10px}
+  #blok[open] summary::before{content:'▾'}
+  #blok summary::-webkit-details-marker{display:none}
+  #puntental{font-size:11.5px;opacity:.7;margin:2px 0 0}
+  #passing{font:11.5px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre-wrap;
+           background:#f4f6f8;border:1px solid var(--line);border-radius:10px;
+           padding:8px 10px;margin-top:8px;display:none}
+  #passing:not(:empty){display:block}
+  /* tijdens het prikken moet de kaart zichtbaar blijven */
+  #align.klein h2,#align.klein p.sub,#align.klein .grid,
+  #align.klein .row:not(#prikrij),#align.klein #blok{display:none}
+  #align.klein{max-height:34vh}
