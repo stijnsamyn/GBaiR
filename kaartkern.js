@@ -24,10 +24,21 @@
  * ------------------------------------------------------------------ */
 const START = { lat: 51.1862115, lon: 4.2085574, w: 1006, h: 912, rot: 0 };
 
-const PLAATSING = 'plaatsing.json';
-const BESTAND = 'kaart.enc';   // gemaakt met: node versleutel.mjs kaart.webp <wachtwoord>
-const VECTOR  = 'plan.enc';    // gemaakt met: node versleutel.mjs plan.geojson <wachtwoord>
-const RONDES  = 600000;        // moet gelijk zijn aan versleutel.mjs
+/* De pagina kan meer dan één kaart tonen; kies met ?kaart=<sleutel>.
+   Een kaart heeft altijd een vectorlaag, en soms een gescande plattegrond
+   eronder met een eigen plaatsing. */
+const KAARTEN = {
+  wtc: { titel:'WTC — straatnamen', vector:'plan.enc',
+         beeld:'kaart.enc', plaatsing:'plaatsing.json' },
+  leopoldsburg: { titel:'Leopoldsburg', vector:'leopoldsburg.enc' }
+};
+const KAARTSLEUTEL = (new URLSearchParams(location.search).get('kaart') || 'wtc');
+const KAART = KAARTEN[KAARTSLEUTEL] || KAARTEN.wtc;
+
+const PLAATSING = KAART.plaatsing;
+const BESTAND = KAART.beeld;    // gemaakt met: node versleutel.mjs kaart.webp <wachtwoord>
+const VECTOR  = KAART.vector;   // gemaakt met: node versleutel.mjs plan.geojson <wachtwoord>
+const RONDES  = 600000;         // moet gelijk zijn aan versleutel.mjs
 /* ------------------------------------------------------------------ */
 
 let melden = () => {}, naOntsleutelen = () => {}, naTekenen = () => {}, naVector = () => {};
@@ -110,14 +121,42 @@ async function ontsleutel(wachtwoord){
   return URL.createObjectURL(new Blob([plat], { type:soort }));
 }
 
-// De vectorlaag is platte tekst zodra hij ontsleuteld is; hij zit achter
-// hetzelfde wachtwoord als het beeld. Ontbreekt hij, dan werkt de rest gewoon.
-async function ontsleutelVector(wachtwoord){
-  try {
-    const { plat } = await ontsleutelRuw(VECTOR, wachtwoord);
-    return JSON.parse(new TextDecoder().decode(plat));
-  } catch(e){ return null; }
+/* Een kaartlaag van een megabyte krimpt ingepakt tot een vijfde. Herkennen
+   doen we aan de gzip-kop, zodat oudere bestanden gewoon blijven werken. */
+async function uitpakken(plat){
+  const b = new Uint8Array(plat);
+  if (!(b[0] === 0x1f && b[1] === 0x8b)) return b;
+  if (typeof DecompressionStream === 'undefined')
+    throw new Error('Deze browser kan ingepakte kaartlagen niet openen');
+  const stroom = new Blob([b]).stream().pipeThrough(new DecompressionStream('gzip'));
+  return new Uint8Array(await new Response(stroom).arrayBuffer());
 }
+
+// De vectorlaag is platte tekst zodra hij ontsleuteld is; hij zit achter
+// hetzelfde wachtwoord als het beeld, en is meteen de toets of dat klopt.
+async function ontsleutelVector(wachtwoord){
+  const { plat } = await ontsleutelRuw(VECTOR, wachtwoord);
+  return JSON.parse(new TextDecoder().decode(await uitpakken(plat)));
+}
+
+/* welke kaart je opent, kies je voor het slot */
+const keuze = document.getElementById('kaartkeuze');
+if (keuze){
+  for (const [sleutel, k] of Object.entries(KAARTEN)){
+    const o = document.createElement('option');
+    o.value = sleutel; o.textContent = k.titel;
+    if (sleutel === KAARTSLEUTEL) o.selected = true;
+    keuze.appendChild(o);
+  }
+  keuze.onchange = () => {
+    const u = new URL(location.href);
+    u.searchParams.set('kaart', keuze.value);
+    location.href = u.toString();
+  };
+}
+document.title = KAART.titel;
+const kop = document.querySelector('#slot h1');
+if (kop) kop.textContent = KAART.titel;
 
 const slot = document.getElementById('slot');
 const fout = document.getElementById('slotfout');
@@ -129,16 +168,19 @@ async function probeer(wachtwoord, stil){
   if (!stil) knop.textContent = 'Ontgrendelen…';
   await new Promise(r => setTimeout(r, 20));           // even laten tekenen
   try {
-    const url = await ontsleutel(wachtwoord);
+    const data = await ontsleutelVector(wachtwoord);        // ook de wachtwoordtoets
+    let url = null;
+    if (BESTAND){ try { url = await ontsleutel(wachtwoord); } catch(e){ url = null; } }
     try { localStorage.setItem(SLEUTELKEY, wachtwoord); } catch(e){}
     slot.classList.add('weg');
     start(url);
-    ontsleutelVector(wachtwoord).then(bouwVector);
+    bouwVector(data);
     return true;
   } catch(e){
     try { localStorage.removeItem(SLEUTELKEY); } catch(err){}
-    fout.textContent = e.message === 'weg'  ? 'Bestand ' + BESTAND + ' niet gevonden.'
-                     : e.message === 'stuk' ? 'Bestand ' + BESTAND + ' is beschadigd.'
+    fout.textContent = e.message === 'weg'  ? 'Bestand ' + VECTOR + ' niet gevonden.'
+                     : e.message === 'stuk' ? 'Bestand ' + VECTOR + ' is beschadigd.'
+                     : e.message.startsWith('Deze browser') ? e.message
                      : 'Wachtwoord klopt niet.';
     knop.disabled = false; knop.textContent = 'Openen';
     veld.value = ''; if (!stil) veld.focus();
@@ -172,19 +214,20 @@ const doorzicht = () => {
 };
 
 function start(url){
-  const h = hoeken(P);
-  overlay = L.imageOverlay.rotated(url, h.lb, h.rb, h.lo,
-              { opacity:doorzicht(), interactive:false }).addTo(map);
+  if (url){
+    const h = hoeken(P);
+    overlay = L.imageOverlay.rotated(url, h.lb, h.rb, h.lo,
+                { opacity:doorzicht(), interactive:false }).addTo(map);
 
-  const proef = new Image();                  // beeldverhouding uit het bestand
-  proef.onload = () => {
-    verhouding = proef.naturalWidth / proef.naturalHeight;
-    // alleen bijstellen als niemand -- publicatie noch toestel -- iets gezegd heeft
-    if (verhoudingVast && !load() && !gepubliceerd){ P.h = P.w / verhouding; teken(); }
-  };
-  proef.src = url;
-
-  map.fitBounds(kader());
+    const proef = new Image();                  // beeldverhouding uit het bestand
+    proef.onload = () => {
+      verhouding = proef.naturalWidth / proef.naturalHeight;
+      // alleen bijstellen als niemand -- publicatie noch toestel -- iets gezegd heeft
+      if (verhoudingVast && !load() && !gepubliceerd){ P.h = P.w / verhouding; teken(); }
+    };
+    proef.src = url;
+    map.fitBounds(kader());
+  }
   naOntsleutelen();
 }
 
@@ -208,6 +251,7 @@ if (opEl) opEl.oninput = e => { if (overlay) overlay.setOpacity(+e.target.value)
 
 /* --- de gepubliceerde plaatsing ophalen --- */
 async function haalPlaatsing(){
+  if (!PLAATSING) return;
   try {
     const res = await fetch(PLAATSING, { cache:'no-cache' });
     if (!res.ok) return;
@@ -242,7 +286,12 @@ const vormen = [];                                 // {laag, uv} om te herplaats
 const etiketten = [];                              // {marker, uv}
 let straten = [];                                  // {naam, delen:[[a,b],…]} in meters
 const straatEtiket = [];                           // om per zoomstand te tonen of te verbergen
+const STRAATBREEDTE = 7;    // meter; de straat wordt als een band getekend en
+const BAND_MIN = 2, BAND_MAX = 64;   // schaalt dus mee met de zoom
+const straatband = [];      // de banden, om hun dikte bij te stellen
 const CODE_VANAF = 18;      // gebouwcodes pas van dichtbij
+const VLAK_VANAF = 15.5;    // bij duizenden gebouwen pas van dichtbij tekenen
+const VEEL_VLAKKEN = 800;
 const NAAM_VANAF = 16.5;    // van hieraf één naam per straat
 const ALLE_VANAF = 17.5;    // van hieraf elk naambordje
 
@@ -282,7 +331,7 @@ const STIJL = {
   zone:      { color:'#d9534f', weight:1,   fillColor:'#d9534f', fillOpacity:.10 },
   gebouw:    { color:'#46525f', weight:1,   fillColor:'#8d99a6', fillOpacity:.60 },
   bijgebouw: { color:'#6e7984', weight:.8,  fillColor:'#c2cad2', fillOpacity:.50 },
-  straat:    { color:'#4a86d8', weight:2.5, opacity:.55 },
+  straat:    { color:'#3b7ddd', opacity:.32, lineCap:'round', lineJoin:'round' },
   lijn:      { color:'#7c8894', weight:1,   opacity:.85 },   // grens, percelen, wegranden
   boomrand:  { color:'#5c8a63', weight:1.2, opacity:.85 }
 };
@@ -321,8 +370,10 @@ function bouwVector(data){
 
     } else if (g.type === 'LineString'){
       const uv = g.coordinates;
-      const laag = L.polyline(uv.map(punt), Object.assign({ renderer:doek }, STIJL.straat)).addTo(gLijn);
+      const laag = L.polyline(uv.map(punt),
+                     Object.assign({ renderer:doek, weight:bandDikte() }, STIJL.straat)).addTo(gLijn);
       vormen.push({ laag, uv, ring:false });
+      straatband.push(laag);
       const naam = k.properties.naam;
       (perStraat[naam] = perStraat[naam] || []).push(uv);
       const e = voegEtiket(k.properties.labelpunt || midden(uv), naam, 'straat', gStraat);
@@ -375,6 +426,8 @@ function bouwVector(data){
     gTerrein.eachLayer(l => b.extend(l.getBounds()));
     if (b.isValid()) map.fitBounds(b.pad(.04));
   }
+  veelVlakken = gVlak.getLayers().length > VEEL_VLAKKEN;
+  regelBand();
   regelZoom();
   naVector();
   melden(straten.length + ' straten geladen');
@@ -438,8 +491,14 @@ function plaatsVector(){
 
 /* Van ver zijn 91 naambordjes één zwarte vlek. Van dichtbij mag alles.
    Daartussen: één naam per straat, op zijn langste stuk. */
+let veelVlakken = false;
 function regelZoom(){
   const z = map.getZoom();
+  if (veelVlakken){
+    const wil = z >= VLAK_VANAF;
+    if (wil && !map.hasLayer(gVlak)) gVlak.addTo(map);
+    if (!wil && map.hasLayer(gVlak)) map.removeLayer(gVlak);
+  }
   const codes = z >= CODE_VANAF;
   if (codes && !map.hasLayer(gCode)) gCode.addTo(map);
   if (!codes && map.hasLayer(gCode)) map.removeLayer(gCode);
@@ -467,6 +526,23 @@ function regelZoom(){
   }
 }
 map.on('zoomend moveend', regelZoom);
+/* Een straat is geen lijn maar een strook van een meter of zeven. Ze wordt dus
+   in meters getekend en niet in beeldpunten: zoom je in, dan wordt ze breder,
+   net als de gebouwen eronder. */
+function pxPerMeter(){
+  const c = map.getCenter(), z = map.getZoom();
+  const a = map.project(c, z), b = map.project(L.latLng(c.lat, c.lng + .001), z);
+  return Math.abs(b.x - a.x) / (.001 * mLon(c.lat));
+}
+function bandDikte(){
+  return Math.max(BAND_MIN, Math.min(BAND_MAX, STRAATBREEDTE * pxPerMeter()));
+}
+function regelBand(){
+  const d = bandDikte();
+  for (const l of straatband) l.setStyle({ weight:d });
+}
+map.on('zoomend', regelBand);
+
 /* ------------------------- in welke straat sta ik ------------------- */
 function afstandTotStuk(p, a, b){
   const dx = b[0]-a[0], dy = b[1]-a[1], L2 = dx*dx + dy*dy;

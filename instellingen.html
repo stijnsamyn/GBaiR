@@ -123,6 +123,7 @@
     <img src="icons/icon-192.png" alt="">
     <h1>WTC — uitlijnen</h1>
     <p>De plattegrond is versleuteld. Geef het wachtwoord.</p>
+    <select id="kaartkeuze" aria-label="Welke kaart"></select>
     <input id="ww" type="password" inputmode="text" autocomplete="current-password"
            enterkeyhint="go" autocapitalize="characters" spellcheck="false"
            aria-label="Wachtwoord" placeholder="wachtwoord">
@@ -142,6 +143,13 @@ const statusEl = document.getElementById('status');
 melden = (t, k='') => { statusEl.textContent = t; statusEl.className = 'pill ' + k; };
 
 let fijn = false;
+
+// Zonder gescande plattegrond valt er niets uit te lijnen; die secties gaan weg.
+if (!BESTAND){
+  for (const id of ['sec-uitlijn','sec-punten']) document.getElementById(id).hidden = true;
+  document.getElementById('fade').hidden = true;
+  document.getElementById('sec-namen').open = true;
+}
 
 /* Tijdens het prikken of bewerken moet de kaart zichtbaar blijven: alleen de
    sectie waarin je bezig bent staat dan open. */

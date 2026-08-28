@@ -20,7 +20,8 @@ staan in geen enkele kaartdienst — vandaar deze pagina.
 | `zet-kaartlaag.sh` | publiceert verzette namen en bijgestelde gebouwen |
 | `vectorplan/open.mjs` | maakt `plan.enc` weer leesbaar om aan te passen |
 | `kaart.enc` | de versleutelde plattegrond, als beeld |
-| `plan.enc` | de versleutelde **vectorlaag**: straten, gebouwen en zones als kaartdata |
+| `plan.enc` | de versleutelde **vectorlaag** van WTC: straten, gebouwen en zones |
+| `leopoldsburg.enc` | dezelfde vorm voor het kamp van Leopoldsburg, rechtstreeks uit OSM |
 | `maak-kaart.sh` | PDF → 400 dpi → bijsnijden → webp → versleutelen |
 | `vectorplan/` | de pijplijn die van dezelfde PDF de vectorlaag maakt |
 | `vectorplan/osm.py`, `pas_osm.py` | OpenStreetMap ophalen en het plan erop leggen |
@@ -59,6 +60,33 @@ Daarna in de repo: **Settings → Pages → Source: Deploy from a branch →
 Op de iPhone: openen in Safari → Deel → **Zet op beginscherm**. Bij het
 eerste gebruik vraagt Safari toestemming voor je locatie; die moet je
 geven. Zet in Instellingen → Safari ook "Exacte locatie" aan.
+
+## Meer dan één kaart
+
+De pagina toont standaard WTC. Met `?kaart=leopoldsburg` krijg je Leopoldsburg;
+op het slotscherm staat ook een keuzelijst. Elke kaart heeft altijd een
+vectorlaag, en soms een gescande plattegrond eronder met een eigen plaatsing.
+
+| kaart | herkomst |
+|---|---|
+| `wtc` | getekend plan, uit de PDF geëxtraheerd, met OSM voor de ligging |
+| `leopoldsburg` | volledig uit OpenStreetMap |
+
+Bij Leopoldsburg valt er niets te extraheren: OSM kent daar **4508 gebouwen en
+163 straatnamen**, en alle namen van de papieren kaart staan er identiek in.
+Dat is het omgekeerde van WTC, waar OSM nul van de zestig namen heeft.
+`vectorplan/osm_kaart.py` bouwt zo'n laag uit één Overpass-bevraging:
+
+```bash
+python3 vectorplan/osm_kaart.py werk leopoldsburg 51.1075,5.2400,51.1265,5.2930
+node versleutel.mjs werk/uit/leopoldsburg.geojson ACP leopoldsburg.enc
+```
+
+Kaartlagen worden **ingepakt voor ze versleuteld worden** — Leopoldsburg krimpt
+van 1,31 MB naar 157 kB, WTC van 260 kB naar 23 kB. De pagina herkent dat aan
+de gzip-kop en pakt zelf uit, dus oudere bestanden blijven werken. Bij meer dan
+800 gebouwen worden die pas vanaf zoom 15,5 getekend, anders zwoegt een gsm op
+duizenden vlakken tegelijk.
 
 ## De vectorlaag
 

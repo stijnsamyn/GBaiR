@@ -10,6 +10,7 @@
  */
 import { readFileSync, writeFileSync, statSync } from 'node:fs';
 import { pbkdf2Sync, randomBytes, createCipheriv } from 'node:crypto';
+import { gzipSync } from 'node:zlib';
 
 const RONDES = 600000;
 const SOORT  = { webp:1, png:2, jpg:3, jpeg:3, geojson:4, json:4 };
@@ -25,7 +26,12 @@ const ext = bron.split('.').pop().toLowerCase();
 if (!SOORT[ext]){ console.error('soort ' + ext + ' wordt niet ondersteund'); process.exit(1); }
 const doel = uitnaam || DOEL[SOORT[ext]];
 
-const plat  = readFileSync(bron);
+// Tekst wordt eerst ingepakt: een GeoJSON van een megabyte krimpt tot een
+// vijfde, en dat scheelt op een gsm meer dan het ontpakken kost. De pagina
+// herkent het aan de gzip-kop en pakt zelf uit.
+let plat = readFileSync(bron);
+const ingepakt = SOORT[ext] === 4;
+if (ingepakt) plat = gzipSync(plat, { level: 9 });
 const salt  = randomBytes(16);
 const iv    = randomBytes(12);
 const sleutel = pbkdf2Sync(Buffer.from(wachtwoord, 'utf8'), salt, RONDES, 32, 'sha256');
@@ -38,6 +44,7 @@ writeFileSync(doel, Buffer.concat([
 ]));
 
 const mb = n => (n/1e6).toFixed(2) + ' MB';
-console.log(`${bron} (${mb(plat.length)})  ->  ${doel} (${mb(statSync(doel).size)})`);
+console.log(`${bron} (${mb(statSync(bron).size)}${ingepakt ? ', ingepakt ' + mb(plat.length) : ''})`
+            + `  ->  ${doel} (${mb(statSync(doel).size)})`);
 console.log(`AES-256-GCM, PBKDF2-SHA256 met ${RONDES.toLocaleString('nl-BE')} rondes.`);
 console.log(`Zet ${doel} in de repo. Het onversleutelde bestand niet — dat staat in .gitignore.`);

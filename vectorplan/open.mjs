@@ -12,6 +12,7 @@
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { pbkdf2Sync, createDecipheriv } from 'node:crypto';
+import { gunzipSync } from 'node:zlib';
 
 const wachtwoord = process.argv[2];
 const bron = process.argv[3] || 'plan.enc';
@@ -29,6 +30,7 @@ let plat;
 try { plat = Buffer.concat([d.update(data), d.final()]); }
 catch { console.error('wachtwoord klopt niet'); process.exit(1); }
 
+if (plat[0] === 0x1f && plat[1] === 0x8b) plat = gunzipSync(plat);   // ingepakt
 const fc = JSON.parse(plat.toString('utf8'));
 writeFileSync(doel, JSON.stringify(fc, null, 1));
 const tel = {};

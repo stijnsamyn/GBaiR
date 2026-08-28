@@ -21,3 +21,6 @@ vectorplan/werk/
 # uitvoer van de passing; de geldende waarde staat in plaatsing.json
 plaatsing_voorstel.json
 vectorplan/werk/
+
+# de onversleutelde kaartlagen
+*.geojson
