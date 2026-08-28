@@ -333,9 +333,16 @@ const STIJL = {
   bijgebouw: { color:'#6e7984', weight:.8,  fillColor:'#c2cad2', fillOpacity:.50 },
   straat:    { color:'#3b7ddd', opacity:.32, lineCap:'round', lineJoin:'round' },
   lijn:      { color:'#7c8894', weight:1,   opacity:.85 },   // grens, percelen, wegranden
-  boomrand:  { color:'#5c8a63', weight:1.2, opacity:.85 }
+  boomrand:  { color:'#5c8a63', weight:1.2, opacity:.85 },
+  spoor:     { color:'#6b7683', weight:1.5, opacity:.8, dashArray:'6 5' },
+  /* de oefenkaart: wat je niet weet als je alleen de straten kent */
+  ftx_gesloten: { color:'#8b5cd6', weight:4,   opacity:.85 },              // niet toegankelijk
+  ftx_slecht:   { color:'#e08010', weight:4,   opacity:.85, dashArray:'9 7' },
+  ftx_tevoet:   { color:'#1f9d3a', weight:5,   opacity:.95 },              // enkel te voet
+  ftx_poort:    { color:'#d92020', weight:5,   opacity:.95 }               // geen doorgang
 };
-const TERREIN = { lijn:1, boomrand:1 };
+const TERREIN = { lijn:1, boomrand:1, spoor:1,
+                  ftx_gesloten:1, ftx_slecht:1, ftx_tevoet:1, ftx_poort:1 };
 
 function bouwVector(data){
   if (!data || !data.features) return;
@@ -352,8 +359,14 @@ function bouwVector(data){
 
     if (g.type === 'Polygon'){
       const uv = g.coordinates[0];
+      const stijl = s === 'ftx_gebouw'
+            ? (k.properties.echt ? { color:'#c2410c', weight:2, fillColor:'#f97316', fillOpacity:.35 }
+                                 : { color:'#475569', weight:2, fillColor:'#64748b', fillOpacity:.35, dashArray:'5 4' })
+            : (STIJL[s] || STIJL.gebouw);
       const laag = L.polygon(uv.map(punt),
-                     Object.assign({ renderer:doek, interactive:s !== 'zone' }, STIJL[s] || STIJL.gebouw));
+                     Object.assign({ renderer:doek, interactive:s !== 'zone' }, stijl));
+      if (s === 'ftx_gebouw')
+        laag.bindTooltip(k.properties.echt ? 'reëel gebouw' : 'fictief gebouw', { direction:'top' });
       if (k.properties.code) laag.bindTooltip(k.properties.code, { direction:'top' });
       laag.addTo(s === 'zone' ? gZone : gVlak);
       vormen.push({ laag, uv, ring:true, kenmerk:k });

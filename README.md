@@ -70,7 +70,7 @@ vectorlaag, en soms een gescande plattegrond eronder met een eigen plaatsing.
 | kaart | herkomst |
 |---|---|
 | `wtc` | getekend plan, uit de PDF geëxtraheerd, met OSM voor de ligging |
-| `leopoldsburg` | volledig uit OpenStreetMap |
+| `leopoldsburg` | uit OpenStreetMap, plus de FTX-overlay van de papieren oefenkaart |
 
 Bij Leopoldsburg valt er niets te extraheren: OSM kent daar **4508 gebouwen en
 163 straatnamen**, en alle namen van de papieren kaart staan er identiek in.
@@ -81,6 +81,27 @@ Dat is het omgekeerde van WTC, waar OSM nul van de zestig namen heeft.
 python3 vectorplan/osm_kaart.py werk leopoldsburg 51.1075,5.2400,51.1265,5.2930
 node versleutel.mjs werk/uit/leopoldsburg.geojson ACP leopoldsburg.enc
 ```
+
+### De FTX-overlay
+
+Wat OSM niet weet en de oefenkaart wel, is overgenomen van de scan:
+
+| | |
+|---|---|
+| 71 | niet-toegankelijke of onbestaande straat (paars) |
+| 15 | toegankelijk maar in slechte staat (oranje) |
+| 15 | hekwerk of poort — geen doorgang (rood) |
+| 9 | bloembakken of betonblokken — enkel te voet (groen) |
+| 35 | gebouwen, apart gemerkt als **reëel** of **fictief** |
+
+De ondergrond van die scan is `© 2006-2015 TomTom / Michelin` en is **niet**
+overgenomen — alleen de overlay, die van de opsteller is. De straten en
+gebouwen eronder komen uit OSM.
+
+`vectorplan/pas_ftx.py` legt de scan op de aarde (0,4480 m per scanpunt,
+draaiing 0,02°) en `vectorplan/ftx_overlay.py` neemt de gekleurde lijnen en
+vlakken over. In de kop van `pas_ftx.py` staan drie doodlopende sporen
+beschreven, want die kosten anders opnieuw tijd.
 
 Kaartlagen worden **ingepakt voor ze versleuteld worden** — Leopoldsburg krimpt
 van 1,31 MB naar 157 kB, WTC van 260 kB naar 23 kB. De pagina herkent dat aan
