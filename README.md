@@ -12,8 +12,10 @@ staan in geen enkele kaartdienst — vandaar deze pagina.
 | Bestand | Wat het doet |
 |---|---|
 | `index.html` | de hele toepassing; bovenaan staat `START`, de plaatsing van de kaart |
-| `kaart.enc` | **ontbreekt nog** — de versleutelde plattegrond |
+| `kaart.enc` | de versleutelde plattegrond, als beeld |
+| `plan.enc` | de versleutelde **vectorlaag**: straten, gebouwen en zones als kaartdata |
 | `maak-kaart.sh` | PDF → 400 dpi → bijsnijden → webp → versleutelen |
+| `vectorplan/` | de pijplijn die van dezelfde PDF de vectorlaag maakt |
 | `versleutel.mjs` | los te gebruiken als je alleen opnieuw wil versleutelen |
 | `sw.js` | offline cache van de pagina, de kaart en bezochte luchtfototegels |
 | `vendor/` | Leaflet 1.9.4 lokaal, zodat er geen CDN nodig is |
@@ -23,8 +25,9 @@ staan in geen enkele kaartdienst — vandaar deze pagina.
 ## Opzetten
 
 ```bash
-./maak-kaart.sh "Kaart WTC - Straatnamen (versie 2026).pdf"   # maakt kaart.enc
-python3 -m http.server 8000                                    # even lokaal bekijken
+./maak-kaart.sh "Kaart WTC - Straatnamen (versie 2026).pdf"           # maakt kaart.enc
+./vectorplan/maak-vector.sh "Kaart WTC - Straatnamen (versie 2026).pdf"  # maakt plan.enc
+python3 -m http.server 8000                                            # even lokaal bekijken
 ```
 
 Op `http://localhost:8000` werkt GPS ook. Op een gewoon `file://`-bestand
@@ -48,6 +51,60 @@ Daarna in de repo: **Settings → Pages → Source: Deploy from a branch →
 Op de iPhone: openen in Safari → Deel → **Zet op beginscherm**. Bij het
 eerste gebruik vraagt Safari toestemming voor je locatie; die moet je
 geven. Zet in Instellingen → Safari ook "Exacte locatie" aan.
+
+## De vectorlaag
+
+De pagina toont geen ingescand beeld meer, maar echte kaartdata: **60 straten,
+131 gebouwvlakken met hun `MG`-code, en 3 zones**. Dat is 52 kB in plaats van
+784 kB, het blijft scherp op elke zoom, en het levert drie dingen op die een
+beeld niet kan:
+
+* **Zoeken.** Het veld bovenaan zoekt op straatnaam én op gebouwcode. Tik een
+  stuk van een naam of een `MG`-nummer en de kaart springt erheen met een
+  oranje ring.
+* **In welke straat sta je.** De statusbalk toont naast de gps-nauwkeurigheid
+  de dichtstbijzijnde straat — binnen 18 m als `· <straat>`, daarbuiten als
+  `· bij <straat>`.
+* **Leesbare namen.** Ze staan altijd horizontaal in plaats van gedraaid mee
+  met de straat, en ze verschijnen naar zoomniveau: niets als je het hele
+  terrein ziet, één naam per straat vanaf zoom 16, alle bordjes vanaf 17,5.
+  Gebouwcodes komen erbij vanaf zoom 18. Dezelfde naam twee keer vlak naast
+  elkaar wordt onderdrukt.
+
+De oude plattegrond staat er nog wel in en is **uit bij het openen** — anders
+toont hij elke naam een tweede keer. Zet hem aan met het lagenknopje
+rechtsboven; hij heeft detail dat de vectorlaag niet heeft (boomranden,
+perceelgrenzen, het spoor).
+
+De coördinaten in `plan.enc` lopen van 0 tot 1 over hetzelfde kader als
+`kaart.webp`. Daardoor geldt `START` voor allebei en verschuift de uitlijnmodus
+de vectoren mee met het beeld.
+
+### Hoe die laag gemaakt is
+
+De PDF is een "Print To PDF" van een CAD-tekening: vier beeldstroken, geen
+fonts, geen vectorpaden. Er valt dus niets uit te lezen; alles komt uit het
+beeld, op 1000 dpi (de PDF bevat 2,5× meer detail dan wat `maak-kaart.sh`
+gebruikt).
+
+| Stap | Hoe |
+|---|---|
+| straatnamen | blauwe letters groeperen, rechtzetten, en lezen |
+| gebouwen | grijze en roze vlakken; arceergaten dichten, dan opensnijden op de zwarte omtrek |
+| gebouwcodes | zwarte bloktekst, gescheiden van het lijnwerk op grootte |
+| straatassen | de naam staat middenop de weg — vanuit het label langs zijn eigen richting groeien tot de doorgang dichtloopt |
+
+De namen en codes zijn met de hand van de uitsneden gelezen, niet met OCR: die
+tekst is klein, staat onder willekeurige hoeken en loopt door lijnwerk heen, en
+een verkeerd gelezen straatnaam is erger dan geen. Dat handwerk zit in
+`vectorplan/brondata.enc`. Uitpakken:
+
+```bash
+node vectorplan/pak-uit.mjs ACP     # zet vectorplan/data/ terug
+```
+
+Verandert de tekening, dan verschuiven de labelnummers en moet dat lezen
+opnieuw: `vectorplan/blad2.py` maakt contactbladen van alle uitsneden.
 
 ## De kaart uitlijnen
 
@@ -92,7 +149,8 @@ randen.
 
 ## Bij een nieuwe versie van het plan
 
-Alleen `kaart.enc` vervangen (`./maak-kaart.sh nieuwplan.pdf`).
+`kaart.enc` én `plan.enc` vervangen (`./maak-kaart.sh nieuwplan.pdf` en
+`./vectorplan/maak-vector.sh nieuwplan.pdf`).
 `START` blijft geldig zolang de tekening
 hetzelfde kader heeft — dus snijd exact op dezelfde manier bij, en noteer
 de bbox die `maak-kaart.sh` afdrukt.
@@ -109,10 +167,17 @@ en kleurt oranje boven 25 m.
 
 ## Het wachtwoord
 
-De plattegrond staat **versleuteld** in de repo, als `kaart.enc`. Wie de
-pagina opent krijgt eerst een slotscherm; pas met het juiste wachtwoord
-wordt het beeld in de browser ontsleuteld. Het onversleutelde bestand komt
-er niet in — `.gitignore` houdt `kaart.webp` tegen.
+De plattegrond staat **versleuteld** in de repo, als `kaart.enc`, en de
+vectorlaag als `plan.enc`. Wie de pagina opent krijgt eerst een slotscherm; pas
+met het juiste wachtwoord wordt alles in de browser ontsleuteld. De
+onversleutelde bestanden komen er niet in — `.gitignore` houdt `kaart.webp`,
+`plan.geojson` en `vectorplan/data/` tegen.
+
+Dat laatste is niet vrijblijvend. Een GeoJSON is platte tekst: alle
+straatnamen en gebouwcodes staan er leesbaar en doorzoekbaar in. Onversleuteld
+in een publieke repo zou dat het slot op `kaart.enc` meteen zinloos maken. Om
+dezelfde reden staat er geen enkele straatnaam in de scripts zelf — de
+koppeltabel zit in `koppel.json`, binnen `brondata.enc`.
 
 Wachtwoord: **ACP**. Na één keer invoeren onthoudt het toestel het, tot je
 de sitegegevens wist.
@@ -126,7 +191,7 @@ is geen schermpje dat je wegklikt.
 Wél: zoekmachines, en iedereen die de repo of de URL tegenkomt en gewoon
 kijkt. Die krijgen een blok willekeurige bytes.
 
-Niet: iemand die `kaart.enc` binnenhaalt en het wachtwoord wil kraken.
+Niet: iemand die `kaart.enc` of `plan.enc` binnenhaalt en het wachtwoord wil kraken.
 `ACP` is drie letters — dat zijn 17 576 mogelijkheden, en die zijn ook met
 600 000 rondes in minuten door te rekenen. De versleuteling is zo sterk als
 het wachtwoord, en drie letters is kort.
@@ -135,16 +200,20 @@ Wil je dat wél dichttimmeren, dan is het één handeling: kies een langere
 zin en draai opnieuw
 
 ```bash
-node versleutel.mjs kaart.webp "een langere zin dan drie letters"
+node versleutel.mjs kaart.webp   "een langere zin dan drie letters"
+node versleutel.mjs plan.geojson "een langere zin dan drie letters"
+node vectorplan/pak-uit.mjs ACP    # eerst uitpakken met het oude wachtwoord
 ```
 
-Er verandert niets aan `index.html` — het wachtwoord staat daar nergens in.
+Alle drie de bestanden moeten hetzelfde wachtwoord krijgen. Er verandert niets
+aan `index.html` — het wachtwoord staat daar nergens in.
 
 ## Verspreiding
 
 **GitHub Pages kan op een gratis account alleen vanuit een publieke repo
-publiceren.** De pagina zelf, de code en `kaart.enc` zijn dus voor iedereen
-op te halen; alleen de inhoud van de plattegrond niet. Dit is een
+publiceren.** De pagina zelf, de code, `kaart.enc`, `plan.enc` en
+`vectorplan/brondata.enc` zijn dus voor iedereen op te halen; alleen de inhoud
+ervan niet. Dit is een
 plattegrond van een politie- en defensieoefenterrein, opgemaakt door CSD
 Oost-Vlaanderen. `robots.txt` en de `noindex`-meta vragen zoekmachines om
 weg te blijven, maar dat is een verzoek, geen slot. Ga na of er intern

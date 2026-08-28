@@ -7,3 +7,13 @@ kaart.png
 kaart.jpg
 kaart400-*.png
 kaart_crop.png
+
+# De vectorlaag bevat alle straatnamen en gebouwcodes als platte tekst.
+# Alleen plan.enc wordt gecommit.
+plan.geojson
+
+# De gelezen namen en codes staan versleuteld in vectorplan/brondata.enc.
+# De uitgepakte vorm en de werkmap horen niet in een publieke repo.
+brondata.json
+vectorplan/data/
+vectorplan/werk/

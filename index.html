@@ -39,7 +39,8 @@
 
   /* ------------------------------ bediening --------------------------- */
   #status{position:absolute;z-index:900;left:max(10px,env(safe-area-inset-left));
-          top:max(10px,env(safe-area-inset-top));padding:7px 11px;font-variant-numeric:tabular-nums}
+          top:calc(max(10px,env(safe-area-inset-top)) + 42px);
+          padding:7px 11px;font-variant-numeric:tabular-nums}
   #status.warn{background:#fff4e2;border-color:#e8b877}
   #status.err {background:#ffe9e9;border-color:#e09a9a}
 
@@ -73,12 +74,41 @@
            white-space:pre;overflow-x:auto;-webkit-user-select:all;user-select:all}
   .note{font-size:11.5px;opacity:.7;margin-top:8px}
   .leaflet-container{background:#e9edf1}
+  .leaflet-top.leaflet-left{margin-top:78px}
+  .leaflet-top.leaflet-right{margin-top:42px}
+
+  /* ---------------------------- vectorlaag ---------------------------- */
+  .leaflet-div-icon.etiket{background:none;border:0;margin:0!important;
+          width:0!important;height:0!important;overflow:visible}
+  .etiket span{position:absolute;transform:translate(-50%,-50%);
+          font-weight:600;white-space:nowrap;pointer-events:none;
+          text-shadow:0 0 3px #fff,0 0 3px #fff,0 0 3px #fff,0 0 5px #fff}
+  .etiket.straat span{font-size:12px;color:#0b4da2}
+  .etiket.code span{font-size:10.5px;color:#2b3540}
+
+  /* ------------------------------- zoeken ------------------------------ */
+  #zoek{position:absolute;z-index:1100;top:max(10px,env(safe-area-inset-top));
+        left:max(10px,env(safe-area-inset-left));right:max(56px,env(safe-area-inset-right))}
+  #zoekveld{width:100%;height:34px;padding:0 12px;font-size:14px;color:var(--ink);
+            background:var(--pill);border:1px solid var(--line);border-radius:12px;
+            box-shadow:0 2px 10px rgba(0,0,0,.18)}
+  #treffers{list-style:none;margin:6px 0 0;padding:4px;max-height:46vh;overflow:auto;display:none}
+  #treffers.on{display:block}
+  #treffers li{padding:8px 10px;border-radius:8px;cursor:pointer;font-size:13.5px}
+  #treffers li:hover,#treffers li:focus{background:#eaf1fb;outline:none}
+  #treffers li .bij{opacity:.55;font-size:11.5px;margin-left:6px}
 </style>
 </head>
 <body>
 
 <div id="map"></div>
 <div id="status" class="pill">GPS zoeken…</div>
+
+<div id="zoek">
+  <input id="zoekveld" type="search" enterkeyhint="search" autocomplete="off"
+         autocapitalize="none" spellcheck="false" placeholder="Zoek straat of gebouw">
+  <ul id="treffers" class="pill" role="listbox"></ul>
+</div>
 
 <div id="fade" class="pill">
   <label for="op">Doorzicht kaart</label>
@@ -143,6 +173,7 @@
 const START = { lat: 51.1862115, lon: 4.2085574, w: 1006, h: 912, rot: 0 };
 
 const BESTAND = 'kaart.enc';   // gemaakt met: node versleutel.mjs kaart.webp <wachtwoord>
+const VECTOR  = 'plan.enc';    // gemaakt met: node versleutel.mjs plan.geojson <wachtwoord>
 const RONDES  = 600000;        // moet gelijk zijn aan versleutel.mjs
 /* ------------------------------------------------------------------ */
 
@@ -181,7 +212,7 @@ const osm = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',
 const LEEG_TEGEL = 'data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==';
 const leeg = L.tileLayer(LEEG_TEGEL, { attribution:'' });
 
-L.control.layers({ 'Geen achtergrond':leeg, 'Luchtfoto':lucht, 'OpenStreetMap':osm },
+const lagenkiezer = L.control.layers({ 'Geen achtergrond':leeg, 'Luchtfoto':lucht, 'OpenStreetMap':osm },
                  null, { position:'topright', collapsed:true }).addTo(map);
 leeg.addTo(map);
 map.fitBounds(L.latLngBounds(Object.values(hoeken(P))).pad(.05));
@@ -191,10 +222,10 @@ map.fitBounds(L.latLngBounds(Object.values(hoeken(P))).pad(.05));
  *    Zonder het juiste wachtwoord komt er geen beeld uit — dit is geen
  *    schermpje dat je wegklikt.
  * ------------------------------------------------------------------ */
-const SOORTEN = { 1:'image/webp', 2:'image/png', 3:'image/jpeg' };
+const SOORTEN = { 1:'image/webp', 2:'image/png', 3:'image/jpeg', 4:'application/json' };
 
-async function ontsleutel(wachtwoord){
-  const res = await fetch(BESTAND);
+async function ontsleutelRuw(bestand, wachtwoord){
+  const res = await fetch(bestand);
   if (!res.ok) throw new Error('weg');
   const b = new Uint8Array(await res.arrayBuffer());
   if (b.length < 34 || String.fromCharCode(b[0],b[1],b[2],b[3]) !== 'WTC1') throw new Error('stuk');
@@ -209,7 +240,21 @@ async function ontsleutel(wachtwoord){
         { name:'AES-GCM', length:256 }, false, ['decrypt']);
   const plat = await crypto.subtle.decrypt({ name:'AES-GCM', iv }, sleutel, data);
 
+  return { soort, plat };
+}
+
+async function ontsleutel(wachtwoord){
+  const { soort, plat } = await ontsleutelRuw(BESTAND, wachtwoord);
   return URL.createObjectURL(new Blob([plat], { type:soort }));
+}
+
+// De vectorlaag is platte tekst zodra hij ontsleuteld is; hij zit achter
+// hetzelfde wachtwoord als het beeld. Ontbreekt hij, dan werkt de rest gewoon.
+async function ontsleutelVector(wachtwoord){
+  try {
+    const { plat } = await ontsleutelRuw(VECTOR, wachtwoord);
+    return JSON.parse(new TextDecoder().decode(plat));
+  } catch(e){ return null; }
 }
 
 const slot = document.getElementById('slot');
@@ -226,6 +271,7 @@ async function probeer(wachtwoord, stil){
     try { localStorage.setItem(SLEUTELKEY, wachtwoord); } catch(e){}
     slot.classList.add('weg');
     start(url);
+    ontsleutelVector(wachtwoord).then(bouwVector);
     return true;
   } catch(e){
     try { localStorage.removeItem(SLEUTELKEY); } catch(err){}
@@ -274,9 +320,9 @@ function start(url){
 }
 
 function teken(){
-  if (!overlay) return;
   const h = hoeken(P);
-  overlay.reposition(h.lb, h.rb, h.lo);
+  if (overlay) overlay.reposition(h.lb, h.rb, h.lo);
+  plaatsVector();
   if (greep) greep.setLatLng([P.lat, P.lon]);
   lees();
 }
@@ -292,7 +338,10 @@ let stip, ring, volgen = false, eerste = true;
 const btnFollow = document.getElementById('btnFollow');
 
 map.on('locationfound', e => {
-  zeg('GPS ±' + Math.round(e.accuracy) + ' m', e.accuracy > 25 ? 'warn' : '');
+  const st = dichtsteStraat(e.latlng);
+  const waar = st && st.afstand < 60
+             ? (st.afstand < 18 ? ' · ' + st.naam : ' · bij ' + st.naam) : '';
+  zeg('GPS ±' + Math.round(e.accuracy) + ' m' + waar, e.accuracy > 25 ? 'warn' : '');
   if (!stip){
     ring = L.circle(e.latlng, { radius:e.accuracy, color:'#1e7bff', weight:1,
                                 fillColor:'#1e7bff', fillOpacity:.10 }).addTo(map);
@@ -409,6 +458,233 @@ document.getElementById('btnCopy').onclick = async () => {
         zeg('Gekopieerd naar klembord'); }
   catch(e){ zeg('Kopiëren lukt niet — selecteer het blok zelf', 'warn'); }
 };
+
+
+/* ------------------------------------------------------------------ *
+ * 4. De vectorlaag: straten, gebouwen en zones als echte kaartdata.
+ *    De coördinaten in plan.enc lopen van 0 tot 1 over het kader van
+ *    de plattegrond, dus dezelfde START-plaatsing geldt voor allebei.
+ * ------------------------------------------------------------------ */
+let plan = null;                                   // de ontsleutelde GeoJSON
+const doek = L.canvas({ padding:.4 });
+const gZone   = L.layerGroup(), gVlak = L.layerGroup(), gLijn = L.layerGroup(),
+      gStraat = L.layerGroup(), gCode = L.layerGroup();
+const vormen = [];                                 // {laag, uv} om te herplaatsen
+const etiketten = [];                              // {marker, uv}
+let straten = [];                                  // {naam, delen:[[a,b],…]} in meters
+const straatEtiket = [];                           // om per zoomstand te tonen of te verbergen
+const CODE_VANAF = 18;      // gebouwcodes pas van dichtbij
+const NAAM_VANAF = 16;      // van hieraf één naam per straat
+const ALLE_VANAF = 17.5;    // van hieraf elk naambordje
+
+/* genormaliseerde plancoördinaat -> plaatselijke meters (oost, noord), vóór draaiing */
+const naarMeter = ([u,v]) => [ (u - .5) * P.w, (.5 - v) * P.h ];
+
+function naarLatLng([u,v]){
+  const t = P.rot * Math.PI/180, c = Math.cos(t), s = Math.sin(t);
+  const [x,y] = naarMeter([u,v]);
+  return L.latLng(P.lat + (-x*s + y*c)/M_LAT, P.lon + (x*c + y*s)/mLon(P.lat));
+}
+
+/* omgekeerd: een gps-punt terug naar het vlakke meterstelsel van het plan */
+function naarVlak(ll){
+  const oost  = (ll.lng - P.lon) * mLon(P.lat);
+  const noord = (ll.lat - P.lat) * M_LAT;
+  const t = -P.rot * Math.PI/180, c = Math.cos(t), s = Math.sin(t);
+  return [ oost*c + noord*s, -oost*s + noord*c ];
+}
+
+const STIJL = {
+  zone:      { color:'#d9534f', weight:1,   fillColor:'#d9534f', fillOpacity:.10 },
+  gebouw:    { color:'#46525f', weight:1,   fillColor:'#8d99a6', fillOpacity:.60 },
+  bijgebouw: { color:'#6e7984', weight:.8,  fillColor:'#c2cad2', fillOpacity:.50 },
+  straat:    { color:'#4a86d8', weight:2.5, opacity:.55 }
+};
+
+function bouwVector(data){
+  if (!data || !data.features) return;
+  plan = data;
+  const perStraat = {};
+
+  for (const k of data.features){
+    const s = k.properties.soort, g = k.geometry;
+
+    if (g.type === 'Polygon'){
+      const uv = g.coordinates[0];
+      const laag = L.polygon(uv.map(naarLatLng),
+                     Object.assign({ renderer:doek, interactive:s !== 'zone' }, STIJL[s] || STIJL.gebouw));
+      if (k.properties.code) laag.bindTooltip(k.properties.code, { direction:'top' });
+      laag.addTo(s === 'zone' ? gZone : gVlak);
+      vormen.push({ laag, uv, ring:true });
+      if (k.properties.code){
+        const m = zwaartepunt(uv);
+        etiketten.push(voegEtiket(m, k.properties.code, 'code', gCode));
+      }
+
+    } else if (g.type === 'LineString'){
+      const uv = g.coordinates;
+      const laag = L.polyline(uv.map(naarLatLng), Object.assign({ renderer:doek }, STIJL.straat)).addTo(gLijn);
+      vormen.push({ laag, uv, ring:false });
+      const naam = k.properties.naam;
+      (perStraat[naam] = perStraat[naam] || []).push(uv);
+      const e = voegEtiket(midden(uv), naam, 'straat', gStraat);
+      e.naam = naam; e.lengte = stukLengte(uv);
+      etiketten.push(e); straatEtiket.push(e);
+
+    } else if (g.type === 'Point'){
+      etiketten.push(voegEtiket(g.coordinates, k.properties.code, 'code', gCode));
+    }
+  }
+
+  straten = Object.entries(perStraat).map(([naam, delen]) => ({ naam, delen }));
+  straten.sort((a,b) => a.naam.localeCompare(b.naam, 'nl'));
+
+  // per straat draagt het langste stuk de naam die als eerste verschijnt
+  const langste = {};
+  for (const e of straatEtiket)
+    if (!langste[e.naam] || e.lengte > langste[e.naam].lengte) langste[e.naam] = e;
+  for (const e of straatEtiket) e.hoofd = (langste[e.naam] === e);
+  straatEtiket.sort((a,b) => (b.hoofd - a.hoofd) || (b.lengte - a.lengte));
+
+  gZone.addTo(map); gVlak.addTo(map); gLijn.addTo(map); gStraat.addTo(map);
+  lagenkiezer.addOverlay(gZone,   'Zones');
+  lagenkiezer.addOverlay(gVlak,   'Gebouwen');
+  lagenkiezer.addOverlay(gLijn,   'Straten');
+  lagenkiezer.addOverlay(gStraat, 'Straatnamen');
+  lagenkiezer.addOverlay(gCode,   'Gebouwcodes');
+  // De vectorlaag draagt de namen nu zelf; de plattegrond eronder zou ze
+  // een tweede keer tonen. Hij blijft één tik ver, via het lagenknopje.
+  if (overlay){ lagenkiezer.addOverlay(overlay, 'Plattegrond'); map.removeLayer(overlay); }
+  regelZoom();
+  vulLijst('');
+  zeg(straten.length + ' straten geladen');
+}
+
+function voegEtiket(uv, tekst, soort, groep){
+  const m = L.marker(naarLatLng(uv), { interactive:false, keyboard:false,
+              icon: L.divIcon({ className:'etiket ' + soort, iconSize:[0,0],
+                                html:'<span>' + ontsmet(tekst) + '</span>' }) }).addTo(groep);
+  return { marker:m, uv };
+}
+const ontsmet = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+function zwaartepunt(ring){
+  let x = 0, y = 0;
+  for (const [u,v] of ring){ x += u; y += v; }
+  return [x/ring.length, y/ring.length];
+}
+const midden = uv => [ (uv[0][0] + uv[uv.length-1][0])/2, (uv[0][1] + uv[uv.length-1][1])/2 ];
+
+function stukLengte(uv){                           // in meter, over het hele lijnstuk
+  let s = 0;
+  for (let i = 0; i < uv.length-1; i++){
+    const a = naarMeter(uv[i]), b = naarMeter(uv[i+1]);
+    s += Math.hypot(b[0]-a[0], b[1]-a[1]);
+  }
+  return s;
+}
+
+/* de plaatsing is veranderd (uitlijnen) — alles opnieuw op de aarde zetten */
+function plaatsVector(){
+  for (const v of vormen)
+    v.laag.setLatLngs(v.ring ? [v.uv.map(naarLatLng)] : v.uv.map(naarLatLng));
+  for (const e of etiketten) e.marker.setLatLng(naarLatLng(e.uv));
+}
+
+/* Van ver zijn 91 naambordjes één zwarte vlek. Van dichtbij mag alles.
+   Daartussen: één naam per straat, op zijn langste stuk. */
+function regelZoom(){
+  const z = map.getZoom();
+  const codes = z >= CODE_VANAF;
+  if (codes && !map.hasLayer(gCode)) gCode.addTo(map);
+  if (!codes && map.hasLayer(gCode)) map.removeLayer(gCode);
+
+  // dezelfde naam twee keer vlak naast elkaar helpt niemand
+  const gehouden = [];
+  for (const e of straatEtiket){
+    let wil = z >= ALLE_VANAF || (z >= NAAM_VANAF && e.hoofd);
+    if (wil && !e.hoofd){
+      const q = map.latLngToContainerPoint(e.marker.getLatLng());
+      for (const g of gehouden)
+        if (g.naam === e.naam && q.distanceTo(g.punt) < 150){ wil = false; break; }
+    }
+    if (wil) gehouden.push({ naam:e.naam, punt:map.latLngToContainerPoint(e.marker.getLatLng()) });
+    if (wil && !gStraat.hasLayer(e.marker)) gStraat.addLayer(e.marker);
+    if (!wil && gStraat.hasLayer(e.marker)) gStraat.removeLayer(e.marker);
+  }
+}
+map.on('zoomend moveend', regelZoom);
+
+/* ------------------------- in welke straat sta ik ------------------- */
+function afstandTotStuk(p, a, b){
+  const dx = b[0]-a[0], dy = b[1]-a[1], L2 = dx*dx + dy*dy;
+  let t = L2 ? ((p[0]-a[0])*dx + (p[1]-a[1])*dy) / L2 : 0;
+  t = Math.max(0, Math.min(1, t));
+  return Math.hypot(p[0] - (a[0]+t*dx), p[1] - (a[1]+t*dy));
+}
+
+function dichtsteStraat(ll){
+  if (!straten.length) return null;
+  const p = naarVlak(ll);
+  let best = null, bestd = Infinity;
+  for (const s of straten)
+    for (const deel of s.delen)
+      for (let i = 0; i < deel.length-1; i++){
+        const d = afstandTotStuk(p, naarMeter(deel[i]), naarMeter(deel[i+1]));
+        if (d < bestd){ bestd = d; best = s.naam; }
+      }
+  return { naam:best, afstand:bestd };
+}
+
+/* ------------------------------- zoeken ----------------------------- */
+const zoekveld = document.getElementById('zoekveld');
+const treffers = document.getElementById('treffers');
+let flits = null;
+
+function vulLijst(vraag){
+  const q = vraag.trim().toLowerCase();
+  const rijen = [];
+  for (const s of straten)
+    if (!q || s.naam.toLowerCase().includes(q)) rijen.push({ naam:s.naam, bij:'straat', doel:midden(s.delen[0]) });
+  if (plan)
+    for (const k of plan.features){
+      const c = k.properties.code;
+      if (!c || (q && !c.toLowerCase().includes(q))) continue;
+      const uv = k.geometry.type === 'Point' ? k.geometry.coordinates : zwaartepunt(k.geometry.coordinates[0]);
+      rijen.push({ naam:c, bij:'gebouw', doel:uv });
+    }
+  rijen.sort((a,b) => a.naam.localeCompare(b.naam, 'nl'));
+  treffers.innerHTML = '';
+  for (const r of rijen.slice(0, 40)){
+    const li = document.createElement('li');
+    li.tabIndex = 0;
+    li.innerHTML = ontsmet(r.naam) + '<span class="bij">' + r.bij + '</span>';
+    const ga = () => { springNaar(r.doel); sluitLijst(); };
+    li.onclick = ga;
+    li.onkeydown = e => { if (e.key === 'Enter') ga(); };
+    treffers.appendChild(li);
+  }
+  treffers.classList.toggle('on', rijen.length > 0 && document.activeElement === zoekveld);
+}
+
+function springNaar(uv){
+  const ll = naarLatLng(uv);
+  map.setView(ll, Math.max(map.getZoom(), 19));
+  if (flits) map.removeLayer(flits);
+  flits = L.circleMarker(ll, { radius:16, color:'#ff8a00', weight:3, fill:false }).addTo(map);
+  setTimeout(() => { if (flits){ map.removeLayer(flits); flits = null; } }, 4000);
+}
+const sluitLijst = () => { treffers.classList.remove('on'); zoekveld.blur(); };
+
+zoekveld.addEventListener('input', () => vulLijst(zoekveld.value));
+zoekveld.addEventListener('focus', () => vulLijst(zoekveld.value));
+zoekveld.addEventListener('keydown', e => {
+  if (e.key === 'Escape'){ zoekveld.value = ''; sluitLijst(); }
+  if (e.key === 'Enter' && treffers.firstChild) treffers.firstChild.click();
+});
+document.addEventListener('click', e => {
+  if (!document.getElementById('zoek').contains(e.target)) treffers.classList.remove('on');
+});
 
 /* -------------------------- offline cache ------------------------- */
 if ('serviceWorker' in navigator && location.protocol === 'https:')
