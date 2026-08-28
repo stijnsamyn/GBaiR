@@ -17,7 +17,7 @@ staan in geen enkele kaartdienst — vandaar deze pagina.
 | `stijl.css` | de opmaak van beide pagina's |
 | `plaatsing.json` | waar de kaart ligt, met een versienummer |
 | `zet-plaatsing.sh` | publiceert een nieuwe uitlijning voor iedereen |
-| `zet-labels.sh` | publiceert verzette straatnaambordjes |
+| `zet-kaartlaag.sh` | publiceert verzette namen en bijgestelde gebouwen |
 | `vectorplan/open.mjs` | maakt `plan.enc` weer leesbaar om aan te passen |
 | `kaart.enc` | de versleutelde plattegrond, als beeld |
 | `plan.enc` | de versleutelde **vectorlaag**: straten, gebouwen en zones als kaartdata |
@@ -255,7 +255,7 @@ onder **Straatnamen verzetten**:
 Wat je verzet blijft op je toestel staan tot je het meegeeft. Twee manieren:
 
 ```bash
-pbpaste | ./zet-labels.sh          # na "kopieer bordjes" — verwerkt en pusht
+pbpaste | ./zet-kaartlaag.sh          # na "kopieer bordjes" — verwerkt en pusht
 ```
 
 of **bewaar bestand**, dat de volledige `plan.geojson` teruggeeft; die
@@ -265,6 +265,29 @@ Er komt geen correctielaag naast de kaart: de plek en de hoek gaan als
 `labelpunt` en `labelhoek` de kaartlaag zelf in. Dat betekent wel dat een
 volledige herbouw met `maak-vector.sh` ze overschrijft — draai die alleen bij
 een nieuwe versie van het plan.
+
+## Gebouwen bijstellen
+
+Alleen de **53 gebouwen die uit de tekening komen** — die van OpenStreetMap
+liggen al juist en zijn niet te bewerken. Op `instellingen.html` onder
+**Gebouwen bijstellen**:
+
+1. Tik **gebouwen bijstellen**. De bewerkbare gebouwen lichten gestreept op.
+2. Tik er een. Er verschijnen oranje grepen op elk hoekpunt en één in het
+   midden.
+3. Sleep een hoekpunt om de vorm te wijzigen, of de middengreep om het hele
+   gebouw te verplaatsen. `↺` en `↻` draaien het rond zijn midden — met
+   **stap: fijn** per graad in plaats van per vijf.
+4. **loslaten** om een volgende te kiezen.
+
+Meegeven gaat net als bij de namen:
+
+```bash
+pbpaste | ./zet-kaartlaag.sh      # na "kopieer gebouwen"
+```
+
+De nieuwe omtrek vervangt de oude in de kaartlaag zelf en krijgt
+`bijgesteld: true` mee, zodat je later ziet wat met de hand is aangeraakt.
 
 ### De kaartlaag met de hand aanpassen
 

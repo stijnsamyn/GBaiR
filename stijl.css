@@ -110,3 +110,8 @@
   #align.klein{max-height:38vh}
   #labeltal{font-size:11.5px;opacity:.7;margin:2px 0 0}
   #align button:disabled{opacity:.4;cursor:default}
+  .hoekgreep{background:#fff;border:2px solid #ff8a00;border-radius:50%;
+             box-shadow:0 1px 4px rgba(0,0,0,.35);cursor:move}
+  .midgreep{background:#ff8a00;border:2px solid #fff;border-radius:50%;
+            box-shadow:0 1px 5px rgba(0,0,0,.4);cursor:move}
+  #gebtal{font-size:11.5px;opacity:.7;margin:2px 0 0}

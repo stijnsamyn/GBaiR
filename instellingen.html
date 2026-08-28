@@ -98,6 +98,24 @@
     <p id="labeltal"></p>
   </details>
 
+  <details id="sec-gebouwen">
+    <summary>Gebouwen bijstellen</summary>
+    <p class="sub">Alleen de gebouwen die uit de tekening komen — die van
+    OpenStreetMap liggen al juist. Ze lichten gestreept op zodra je begint.</p>
+    <div class="row" id="gebrij">
+      <button class="wide" id="btnGeb" aria-pressed="false">gebouwen bijstellen</button>
+      <button data-g="ccw" title="linksom draaien">↺</button>
+      <button data-g="cw"  title="rechtsom draaien">↻</button>
+      <button class="wide" id="btnGebLos">loslaten</button>
+    </div>
+    <div class="row" id="gebrij2">
+      <button class="wide" id="btnGebUit">bewaar bestand</button>
+      <button class="wide" id="btnGebKopie">kopieer gebouwen</button>
+      <button class="wide" id="btnGebWis">alles terug</button>
+    </div>
+    <p id="gebtal"></p>
+  </details>
+
 </div>
 
 <div id="slot">
@@ -128,12 +146,13 @@ let fijn = false;
 /* Tijdens het prikken of bewerken moet de kaart zichtbaar blijven: alleen de
    sectie waarin je bezig bent staat dan open. */
 function toonSectie(alleen){
-  for (const id of ['sec-uitlijn','sec-punten','sec-namen']){
+  for (const id of ['sec-uitlijn','sec-punten','sec-namen','sec-gebouwen']){
     const d = document.getElementById(id);
     if (alleen) d.open = (id === alleen);
   }
   document.getElementById('align').classList.toggle('klein', !!alleen);
 }
+let gebBewerken = false;      // wordt verderop echt gevuld; hier al bekend voor de kliktoets
 
 /* de greep verschijnt zodra de kaart er is */
 naOntsleutelen = () => {
@@ -430,7 +449,7 @@ function leg(e){
 }
 
 map.on('click', ev => {
-  if (!bewerken || prikken) return;
+  if (!bewerken || prikken || gebBewerken) return;
   const q = map.latLngToContainerPoint(ev.latlng);
   let best = null, bestd = 44;
   for (const e of straatEtiket){
@@ -500,11 +519,192 @@ document.getElementById('btnLabelUit').onclick = () => {
 document.getElementById('btnLabelKopie').onclick = async () => {
   const blok = JSON.stringify({ bordjes: wijziging }, null, 1);
   try { await navigator.clipboard.writeText(blok);
-        melden('Gekopieerd — voer ./zet-labels.sh uit'); }
+        melden('Gekopieerd — voer ./zet-kaartlaag.sh uit'); }
   catch(e){ melden('Kopiëren lukt niet', 'warn'); }
 };
 
 toonTeller();
+
+
+/* ------------------------------------------------------------------ *
+ * Gebouwen bijstellen.
+ *
+ * Alleen de gebouwen die uit de tekening komen: die van OpenStreetMap
+ * liggen al juist, en daar valt niets te verbeteren. De aangepaste
+ * omtrek gaat in de kaartlaag zelf, net als bij de straatnamen.
+ * ------------------------------------------------------------------ */
+const GEBKEY = 'wtc_gebouwen_v1';
+let gebGekozen = null, grepen = [], middengreep = null;
+let gebWijziging = {};
+try { gebWijziging = JSON.parse(localStorage.getItem(GEBKEY)) || {}; } catch(e){ gebWijziging = {}; }
+const bewaarGeb = () => { try { localStorage.setItem(GEBKEY, JSON.stringify(gebWijziging)); } catch(e){} };
+
+const uitTekening = v => v.kenmerk && v.kenmerk.properties.bron === 'plan'
+                         && v.kenmerk.geometry.type === 'Polygon';
+const gebSleutel = v => String(plan.features.indexOf(v.kenmerk));
+
+function toonGebTeller(){
+  const n = Object.keys(gebWijziging).length;
+  document.getElementById('gebtal').textContent =
+    (vormen.filter(uitTekening).length + ' uit de tekening') +
+    (n ? ' — ' + n + ' bijgesteld' : ' — nog niets bijgesteld');
+  document.getElementById('btnGebUit').disabled = !n;
+  document.getElementById('btnGebKopie').disabled = !n;
+}
+
+/* eerder bijgestelde omtrekken terugzetten zodra de laag er is */
+const vorigNaVector2 = naVector;
+naVector = () => {
+  vorigNaVector2();
+  for (const v of vormen){
+    if (!uitTekening(v)) continue;
+    const w = gebWijziging[gebSleutel(v)];
+    if (!w) continue;
+    v.uv = w.ring;
+    v.laag.setLatLngs([w.ring.map(punt)]);
+  }
+  toonGebTeller();
+};
+
+function inVeelhoek(ll, ring){
+  let raak = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++){
+    const [xi, yi] = ring[i], [xj, yj] = ring[j];
+    if ((yi > ll.lat) !== (yj > ll.lat) &&
+        ll.lng < (xj - xi) * (ll.lat - yi) / (yj - yi) + xi) raak = !raak;
+  }
+  return raak;
+}
+
+function gebLos(){
+  for (const g of grepen) map.removeLayer(g);
+  grepen = [];
+  if (middengreep){ map.removeLayer(middengreep); middengreep = null; }
+  if (gebGekozen) gebGekozen.laag.setStyle(STIJL[gebGekozen.kenmerk.properties.soort] || STIJL.gebouw);
+  gebGekozen = null;
+}
+
+function legGeb(v){
+  gebWijziging[gebSleutel(v)] = { ring: v.uv.map(p => [ +p[0].toFixed(7), +p[1].toFixed(7) ]) };
+  bewaarGeb(); toonGebTeller();
+}
+
+function hertekenGreep(v){
+  v.laag.setLatLngs([v.uv.map(punt)]);
+  grepen.forEach((g, i) => g.setLatLng(punt(v.uv[i])));
+  if (middengreep) middengreep.setLatLng(v.laag.getBounds().getCenter());
+}
+
+function kiesGebouw(v){
+  gebLos();
+  gebGekozen = v;
+  v.laag.setStyle({ color:'#ff8a00', weight:2, fillColor:'#ff8a00', fillOpacity:.25 });
+  const laatste = v.uv.length - 1;
+  const gesloten = v.uv[0][0] === v.uv[laatste][0] && v.uv[0][1] === v.uv[laatste][1];
+  const tot = gesloten ? laatste : v.uv.length;
+  for (let i = 0; i < tot; i++){
+    const g = L.marker(punt(v.uv[i]), { draggable:true, keyboard:false,
+                icon: L.divIcon({ className:'hoekgreep', iconSize:[14,14] }) }).addTo(map);
+    g.on('drag', ev => {
+      const ll = ev.target.getLatLng();
+      v.uv[i] = [ll.lng, ll.lat];
+      if (gesloten && i === 0) v.uv[laatste] = [ll.lng, ll.lat];
+      v.laag.setLatLngs([v.uv.map(punt)]);
+    });
+    g.on('dragend', () => legGeb(v));
+    grepen.push(g);
+  }
+  // een greep in het midden om het hele gebouw te verplaatsen
+  let vorig = null;
+  middengreep = L.marker(v.laag.getBounds().getCenter(), { draggable:true, keyboard:false,
+                  title:'Sleep het hele gebouw',
+                  icon: L.divIcon({ className:'midgreep', iconSize:[18,18] }) }).addTo(map);
+  middengreep.on('dragstart', ev => { vorig = ev.target.getLatLng(); });
+  middengreep.on('drag', ev => {
+    const nu = ev.target.getLatLng();
+    const dlat = nu.lat - vorig.lat, dlon = nu.lng - vorig.lng;
+    vorig = nu;
+    v.uv = v.uv.map(([x, y]) => [x + dlon, y + dlat]);
+    v.laag.setLatLngs([v.uv.map(punt)]);
+    grepen.forEach((g, i) => g.setLatLng(punt(v.uv[i])));
+  });
+  middengreep.on('dragend', () => legGeb(v));
+  melden((v.kenmerk.properties.code || 'gebouw') + ' — sleep een hoekpunt, het midden, of draai');
+}
+
+function draaiGebouw(graden){
+  const v = gebGekozen;
+  if (!v) return melden('Kies eerst een gebouw', 'warn');
+  const c = v.laag.getBounds().getCenter();
+  const k = mLon(c.lat), t = graden * Math.PI / 180, cs = Math.cos(t), sn = Math.sin(t);
+  v.uv = v.uv.map(([x, y]) => {
+    const dx = (x - c.lng) * k, dy = (y - c.lat) * M_LAT;
+    return [ c.lng + (dx * cs - dy * sn) / k, c.lat + (dx * sn + dy * cs) / M_LAT ];
+  });
+  hertekenGreep(v); legGeb(v);
+}
+
+map.on('click', ev => {
+  if (!gebBewerken || prikken || bewerken) return;
+  const raak = vormen.filter(uitTekening).filter(v => inVeelhoek(ev.latlng, v.uv));
+  if (!raak.length){ gebLos(); return melden('Geen getekend gebouw op die plek'); }
+  raak.sort((a, b) => a.laag.getBounds().getNorth() - a.laag.getBounds().getSouth()
+                    - (b.laag.getBounds().getNorth() - b.laag.getBounds().getSouth()));
+  kiesGebouw(raak[0]);
+});
+
+document.getElementById('btnGeb').onclick = e => {
+  gebBewerken = !gebBewerken; gebLos();
+  e.target.setAttribute('aria-pressed', gebBewerken);
+  e.target.textContent = gebBewerken ? 'stop met bijstellen' : 'gebouwen bijstellen';
+  toonSectie(gebBewerken ? 'sec-gebouwen' : null);
+  // de gebouwen uit de tekening oplichten, zodat je ziet wat bij te stellen valt
+  for (const v of vormen.filter(uitTekening))
+    v.laag.setStyle(gebBewerken ? { color:'#c2410c', weight:1.5, dashArray:'4 3' }
+                                : STIJL[v.kenmerk.properties.soort] || STIJL.gebouw);
+  melden(gebBewerken ? 'Tik een gestreept gebouw om het bij te stellen' : 'uitlijnen');
+};
+
+document.querySelectorAll('#gebrij button[data-g]').forEach(b => {
+  b.onclick = () => draaiGebouw((fijn ? 1 : 5) * (b.dataset.g === 'cw' ? 1 : -1));
+});
+document.getElementById('btnGebLos').onclick = () => { gebLos(); melden('Gebouw losgelaten'); };
+document.getElementById('btnGebWis').onclick = () => {
+  if (!confirm('Alle bijgestelde gebouwen terugzetten?')) return;
+  gebLos();
+  for (const v of vormen.filter(uitTekening)){
+    const s = gebSleutel(v);
+    if (!gebWijziging[s]) continue;
+    v.uv = plan.features[+s].geometry.coordinates[0].map(q => q.slice());
+    v.laag.setLatLngs([v.uv.map(punt)]);
+  }
+  gebWijziging = {}; bewaarGeb(); toonGebTeller(); melden('Alles teruggezet');
+};
+
+function bijgewerktPlanGeb(fc){
+  for (const [s, w] of Object.entries(gebWijziging)){
+    const k = fc.features[+s];
+    if (k && k.geometry.type === 'Polygon') k.geometry.coordinates = [w.ring];
+  }
+  return fc;
+}
+
+document.getElementById('btnGebUit').onclick = () => {
+  const blob = new Blob([JSON.stringify(bijgewerktPlanGeb(bijgewerktPlan()))],
+                        { type:'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = 'plan.geojson';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  melden('plan.geojson gedownload — versleutel het en zet het online');
+};
+document.getElementById('btnGebKopie').onclick = async () => {
+  try { await navigator.clipboard.writeText(JSON.stringify({ gebouwen: gebWijziging }, null, 1));
+        melden('Gekopieerd — voer ./zet-kaartlaag.sh uit'); }
+  catch(e){ melden('Kopiëren lukt niet', 'warn'); }
+};
+
+toonGebTeller();
 
 </script>
 </body>

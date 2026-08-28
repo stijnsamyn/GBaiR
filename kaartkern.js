@@ -307,7 +307,7 @@ function bouwVector(data){
                      Object.assign({ renderer:doek, interactive:s !== 'zone' }, STIJL[s] || STIJL.gebouw));
       if (k.properties.code) laag.bindTooltip(k.properties.code, { direction:'top' });
       laag.addTo(s === 'zone' ? gZone : gVlak);
-      vormen.push({ laag, uv, ring:true });
+      vormen.push({ laag, uv, ring:true, kenmerk:k });
       if (k.properties.code){
         const m = zwaartepunt(uv);
         etiketten.push(voegEtiket(m, k.properties.code, 'code', gCode));
