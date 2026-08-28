@@ -325,8 +325,10 @@ function bouwVector(data){
       vormen.push({ laag, uv, ring:false });
       const naam = k.properties.naam;
       (perStraat[naam] = perStraat[naam] || []).push(uv);
-      const e = voegEtiket(midden(uv), naam, 'straat', gStraat);
+      const e = voegEtiket(k.properties.labelpunt || midden(uv), naam, 'straat', gStraat);
       e.naam = naam; e.lengte = stukLengte(uv); e.langs = uv;
+      e.kenmerk = k;                              // om te kunnen bewerken
+      if (typeof k.properties.labelhoek === 'number') e.vasteHoek = k.properties.labelhoek;
       etiketten.push(e); straatEtiket.push(e);
 
     } else if (g.type === 'Point'){
@@ -389,6 +391,12 @@ function voegEtiket(uv, tekst, soort, groep){
    De hoek is die van het lijnstuk op het scherm; die verandert alleen als de
    plaatsing draait, niet bij zoomen. */
 function draaiEtiket(e){
+  if (typeof e.vasteHoek === 'number'){          // met de hand gezet
+    e.hoek = e.vasteHoek;
+    const el = e.marker.getElement() && e.marker.getElement().firstChild;
+    if (el) el.style.transform = 'translate(-50%,-50%) rotate(' + e.hoek.toFixed(1) + 'deg)';
+    return;
+  }
   if (!e.langs || e.langs.length < 2) return;
   const a = map.project(punt(e.langs[0]), 18);
   const b = map.project(punt(e.langs[e.langs.length - 1]), 18);

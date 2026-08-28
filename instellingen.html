@@ -27,49 +27,77 @@
 </div>
 
 <div id="align" class="pill on">
-  <h2>Plattegrond uitlijnen</h2>
-  <p class="sub">De kaartlaag ligt al in echte coördinaten en beweegt hier niet mee.
-  Dit gaat over de <b>plattegrond-afbeelding</b> die je eronder kan leggen (knop ▦):
-  sleep de blauwe greep en stem bij tot de tekening op de luchtfoto past.</p>
 
-  <div class="grid">
-    <span></span><button data-a="n">↑</button><span></span>
-    <button data-a="w">←</button><button data-a="rst" title="Terug naar de gepubliceerde plaatsing">⟲</button><button data-a="e">→</button>
-    <span></span><button data-a="s">↓</button><span></span>
-  </div>
+  <details id="sec-uitlijn" open>
+    <summary>Plattegrond uitlijnen</summary>
+    <p class="sub">De kaartlaag ligt al in echte coördinaten en beweegt hier niet mee.
+    Dit gaat over de <b>plattegrond-afbeelding</b> die je eronder kan leggen (knop ▦):
+    sleep de blauwe greep en stem bij tot de tekening op de luchtfoto past.</p>
 
-  <div class="row">
-    <span style="font-size:12px;opacity:.7">grootte</span>
-    <button data-a="-">−</button><button data-a="+">+</button>
-    <span style="font-size:12px;opacity:.7;margin-left:8px">draaien</span>
-    <button data-a="ccw">↺</button><button data-a="cw">↻</button>
-  </div>
+    <div class="grid">
+      <span></span><button data-a="n">↑</button><span></span>
+      <button data-a="w">←</button><button data-a="rst" title="Terug naar de gepubliceerde plaatsing">⟲</button><button data-a="e">→</button>
+      <span></span><button data-a="s">↓</button><span></span>
+    </div>
 
-  <div class="row">
-    <button class="wide" id="btnStep" aria-pressed="false">stap: grof</button>
-    <button class="wide" id="btnLock" aria-pressed="true">verhouding vast</button>
-    <button class="wide" id="btnCopy">kopieer</button>
-  </div>
+    <div class="row">
+      <span style="font-size:12px;opacity:.7">grootte</span>
+      <button data-a="-">−</button><button data-a="+">+</button>
+      <span style="font-size:12px;opacity:.7;margin-left:8px">draaien</span>
+      <button data-a="ccw">↺</button><button data-a="cw">↻</button>
+    </div>
 
-  <div class="row" id="prikrij">
-    <button class="wide" id="btnPrik" aria-pressed="false">punten prikken</button>
-    <button class="wide" id="btnPas">bereken passing</button>
-    <button class="wide" id="btnWisPunt">punt weg</button>
-  </div>
-  <p id="puntental"></p>
-  <div id="passing"></div>
+    <div class="row">
+      <button class="wide" id="btnStep" aria-pressed="false">stap: grof</button>
+      <button class="wide" id="btnLock" aria-pressed="true">verhouding vast</button>
+      <button class="wide" id="btnCopy">kopieer</button>
+    </div>
 
-  <details id="blok">
-    <summary>blok om te publiceren</summary>
-    <p id="uitleg">Wat je hier bijstelt geldt <b>alleen op dit toestel</b>. Om het
-    voor iedereen te laten gelden: tik <b>kopieer</b> en zet dit blok in
-    <code>plaatsing.json</code> in de repo. Het versienummer is al verhoogd —
-    daardoor laat elk toestel bij het volgende openen zijn eigen bijstelling los
-    en neemt deze over.</p>
-    <div id="readout"></div>
-    <p id="versie"></p>
-    <div id="hoekenuit"></div>
+    <details id="blok">
+      <summary>blok om te publiceren</summary>
+      <p id="uitleg">Wat je hier bijstelt geldt <b>alleen op dit toestel</b>. Om het
+      voor iedereen te laten gelden: tik <b>kopieer</b> en zet dit blok in
+      <code>plaatsing.json</code> in de repo. Het versienummer is al verhoogd —
+      daardoor laat elk toestel bij het volgende openen zijn eigen bijstelling los
+      en neemt deze over.</p>
+      <div id="readout"></div>
+      <p id="versie"></p>
+      <div id="hoekenuit"></div>
+    </details>
   </details>
+
+  <details id="sec-punten">
+    <summary>Controlepunten</summary>
+    <p class="sub">Tik een herkenbare plek op de tekening, dan diezelfde plek op de
+    luchtfoto. Vanaf drie punten wordt de best passende plaatsing berekend.</p>
+    <div class="row" id="prikrij">
+      <button class="wide" id="btnPrik" aria-pressed="false">punten prikken</button>
+      <button class="wide" id="btnPas">bereken passing</button>
+      <button class="wide" id="btnWisPunt">punt weg</button>
+    </div>
+    <p id="puntental"></p>
+    <div id="passing"></div>
+  </details>
+
+  <details id="sec-namen">
+    <summary>Straatnamen verzetten</summary>
+    <p class="sub">Tik een naam op de kaart, sleep hem naar zijn plek en draai hem
+    recht. De plek en de hoek gaan in de kaartlaag zelf.</p>
+    <div class="row" id="labelrij">
+      <button class="wide" id="btnLabel" aria-pressed="false">namen bewerken</button>
+      <button data-d="ccw" title="linksom draaien">↺</button>
+      <button data-d="cw"  title="rechtsom draaien">↻</button>
+      <button data-d="recht" class="wide" title="terug naar de richting van de straat">langs straat</button>
+      <button class="wide" id="btnLabelLos">loslaten</button>
+    </div>
+    <div class="row" id="labelrij2">
+      <button class="wide" id="btnLabelUit">bewaar bestand</button>
+      <button class="wide" id="btnLabelKopie">kopieer bordjes</button>
+      <button class="wide" id="btnLabelWis">alles terug</button>
+    </div>
+    <p id="labeltal"></p>
+  </details>
+
 </div>
 
 <div id="slot">
@@ -96,6 +124,16 @@ const statusEl = document.getElementById('status');
 melden = (t, k='') => { statusEl.textContent = t; statusEl.className = 'pill ' + k; };
 
 let fijn = false;
+
+/* Tijdens het prikken of bewerken moet de kaart zichtbaar blijven: alleen de
+   sectie waarin je bezig bent staat dan open. */
+function toonSectie(alleen){
+  for (const id of ['sec-uitlijn','sec-punten','sec-namen']){
+    const d = document.getElementById(id);
+    if (alleen) d.open = (id === alleen);
+  }
+  document.getElementById('align').classList.toggle('klein', !!alleen);
+}
 
 /* de greep verschijnt zodra de kaart er is */
 naOntsleutelen = () => {
@@ -303,7 +341,7 @@ document.getElementById('btnPrik').onclick = e => {
   prikken = !prikken; halve = null;
   e.target.setAttribute('aria-pressed', prikken);
   e.target.textContent = prikken ? 'stop met prikken' : 'punten prikken';
-  document.getElementById('align').classList.toggle('klein', prikken);
+  toonSectie(prikken ? 'sec-punten' : null);
   melden(prikken ? 'Tik een herkenbare plek op de tekening' : 'uitlijnen');
   tekenPunten();
 };
@@ -317,6 +355,156 @@ document.getElementById('btnWisPunt').onclick = () => {
 const vorigNaTekenen = naTekenen;
 naTekenen = () => { vorigNaTekenen(); tekenPunten(); };
 tekenPunten();
+
+
+/* ------------------------------------------------------------------ *
+ * Straatnaambordjes verplaatsen en draaien.
+ *
+ * Het bordje krijgt dan een eigen plek en hoek, los van de straatas
+ * waaraan het hangt. Die twee komen als `labelpunt` en `labelhoek` in de
+ * kaartlaag zelf terecht -- geen correctielaag ernaast, maar het bestand
+ * zelf. Wat je hier doet blijft op dit toestel tot je het meegeeft.
+ * ------------------------------------------------------------------ */
+const LABELKEY = 'wtc_labels_v1';
+let bewerken = false, gekozen = null, handvat = null;
+let wijziging = {};
+try { wijziging = JSON.parse(localStorage.getItem(LABELKEY)) || {}; } catch(e){ wijziging = {}; }
+const bewaarWijziging = () => { try { localStorage.setItem(LABELKEY, JSON.stringify(wijziging)); } catch(e){} };
+
+const telWijzigingen = () => Object.keys(wijziging).length;
+function toonTeller(){
+  const el = document.getElementById('labeltal');
+  const n = telWijzigingen();
+  el.textContent = n ? n + ' bordje' + (n === 1 ? '' : 's') + ' verzet' : 'nog niets verzet';
+  document.getElementById('btnLabelUit').disabled = !n;
+  document.getElementById('btnLabelKopie').disabled = !n;
+}
+
+const sleutelVan = e => String(plan.features.indexOf(e.kenmerk));
+
+/* de eerder bewaarde wijzigingen toepassen zodra de laag er is */
+const vorigNaVector = naVector;
+naVector = () => {
+  vorigNaVector();
+  for (const e of straatEtiket){
+    const w = wijziging[sleutelVan(e)];
+    if (!w) continue;
+    if (w.punt){ e.uv = w.punt; e.marker.setLatLng(punt(w.punt)); }
+    if (typeof w.hoek === 'number') e.vasteHoek = w.hoek;
+    draaiEtiket(e);
+  }
+  toonTeller();
+};
+
+function kiesBordje(e){
+  losLaten();
+  gekozen = e;
+  const el = e.marker.getElement() && e.marker.getElement().firstChild;
+  if (el) el.style.outline = '2px solid #ff8a00';
+  handvat = L.marker(e.marker.getLatLng(), { draggable:true, autoPan:true,
+              title:'Sleep het bordje' }).addTo(map);
+  handvat.on('drag', ev => {
+    const ll = ev.target.getLatLng();
+    e.uv = [ll.lng, ll.lat];
+    e.marker.setLatLng(ll);
+  });
+  handvat.on('dragend', () => leg(e));
+  melden('“' + e.naam + '” — sleep, of draai met ↺ ↻');
+}
+
+function losLaten(){
+  if (gekozen){
+    const el = gekozen.marker.getElement() && gekozen.marker.getElement().firstChild;
+    if (el) el.style.outline = '';
+  }
+  if (handvat){ map.removeLayer(handvat); handvat = null; }
+  gekozen = null;
+}
+
+function leg(e){
+  const s = sleutelVan(e);
+  const w = wijziging[s] || {};
+  w.punt = [ +e.uv[0].toFixed(7), +e.uv[1].toFixed(7) ];
+  if (typeof e.vasteHoek === 'number') w.hoek = +e.vasteHoek.toFixed(1);
+  wijziging[s] = w; bewaarWijziging(); toonTeller();
+}
+
+map.on('click', ev => {
+  if (!bewerken || prikken) return;
+  const q = map.latLngToContainerPoint(ev.latlng);
+  let best = null, bestd = 44;
+  for (const e of straatEtiket){
+    if (!gStraat.hasLayer(e.marker)) continue;
+    const d = q.distanceTo(map.latLngToContainerPoint(e.marker.getLatLng()));
+    if (d < bestd){ bestd = d; best = e; }
+  }
+  if (best) kiesBordje(best); else { losLaten(); melden('Geen bordje op die plek'); }
+});
+
+document.getElementById('btnLabel').onclick = e => {
+  bewerken = !bewerken; losLaten();
+  e.target.setAttribute('aria-pressed', bewerken);
+  e.target.textContent = bewerken ? 'stop met bewerken' : 'namen bewerken';
+  toonSectie(bewerken ? 'sec-namen' : null);
+  if (bewerken && map.getZoom() < ALLE_VANAF) map.setZoom(ALLE_VANAF);
+  melden(bewerken ? 'Tik een straatnaam om hem te verzetten' : 'uitlijnen');
+};
+
+document.querySelectorAll('#labelrij button[data-d]').forEach(b => {
+  b.onclick = () => {
+    if (!gekozen) return melden('Kies eerst een bordje', 'warn');
+    const stap = b.dataset.d === 'recht' ? null : (fijn ? 1 : 5) * (b.dataset.d === 'cw' ? 1 : -1);
+    if (stap === null){
+      delete gekozen.vasteHoek;                       // terug naar de richting van de straat
+      const s = sleutelVan(gekozen);
+      if (wijziging[s]) delete wijziging[s].hoek;
+    } else {
+      const nu = typeof gekozen.vasteHoek === 'number' ? gekozen.vasteHoek : (gekozen.hoek || 0);
+      gekozen.vasteHoek = nu + stap;
+    }
+    draaiEtiket(gekozen); leg(gekozen);
+  };
+});
+
+document.getElementById('btnLabelLos').onclick = () => { losLaten(); melden('Bordje losgelaten'); };
+
+document.getElementById('btnLabelWis').onclick = () => {
+  if (!confirm('Alle verzette bordjes terugzetten?')) return;
+  wijziging = {}; bewaarWijziging(); losLaten();
+  for (const e of straatEtiket){ delete e.vasteHoek; e.uv = midden(e.langs); e.marker.setLatLng(punt(e.uv)); draaiEtiket(e); }
+  toonTeller(); melden('Alles teruggezet');
+};
+
+/* het hele bestand terug, met de bordjes erin verwerkt */
+function bijgewerktPlan(){
+  const kopie = JSON.parse(JSON.stringify(plan));
+  for (const [s, w] of Object.entries(wijziging)){
+    const k = kopie.features[+s];
+    if (!k) continue;
+    if (w.punt) k.properties.labelpunt = w.punt;
+    if (typeof w.hoek === 'number') k.properties.labelhoek = w.hoek;
+    else delete k.properties.labelhoek;
+  }
+  return kopie;
+}
+
+document.getElementById('btnLabelUit').onclick = () => {
+  const blob = new Blob([JSON.stringify(bijgewerktPlan())], { type:'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = 'plan.geojson';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  melden('plan.geojson gedownload — versleutel het en zet het online');
+};
+
+document.getElementById('btnLabelKopie').onclick = async () => {
+  const blok = JSON.stringify({ bordjes: wijziging }, null, 1);
+  try { await navigator.clipboard.writeText(blok);
+        melden('Gekopieerd — voer ./zet-labels.sh uit'); }
+  catch(e){ melden('Kopiëren lukt niet', 'warn'); }
+};
+
+toonTeller();
 
 </script>
 </body>

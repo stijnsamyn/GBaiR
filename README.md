@@ -17,6 +17,8 @@ staan in geen enkele kaartdienst — vandaar deze pagina.
 | `stijl.css` | de opmaak van beide pagina's |
 | `plaatsing.json` | waar de kaart ligt, met een versienummer |
 | `zet-plaatsing.sh` | publiceert een nieuwe uitlijning voor iedereen |
+| `zet-labels.sh` | publiceert verzette straatnaambordjes |
+| `vectorplan/open.mjs` | maakt `plan.enc` weer leesbaar om aan te passen |
 | `kaart.enc` | de versleutelde plattegrond, als beeld |
 | `plan.enc` | de versleutelde **vectorlaag**: straten, gebouwen en zones als kaartdata |
 | `maak-kaart.sh` | PDF → 400 dpi → bijsnijden → webp → versleutelen |
@@ -237,6 +239,42 @@ overal. Zit je erboven, dan is de tekening getekend en niet ingemeten — dan
 gaat **geen enkele** lineaire plaatsing overal tegelijk passen. Leg ze dan goed
 in de zone waar je het vaakst staat, of laat de vectorlaag rubbersheeten bij
 het bouwen.
+
+## Straatnamen verzetten
+
+De naam van een straat staat standaard midden op zijn as, in de richting van
+die as. Waar dat lelijk uitvalt kan je hem verzetten, op `instellingen.html`
+onder **Straatnamen verzetten**:
+
+1. Tik **namen bewerken**. De kaart zoomt in tot alle bordjes zichtbaar zijn.
+2. Tik een naam. Er verschijnt een greep; sleep die naar de goede plek.
+3. Draai met `↺` en `↻` — met **stap: fijn** per graad in plaats van per vijf.
+   **langs straat** zet hem terug in de richting van zijn as.
+4. **loslaten** om een volgende te kiezen.
+
+Wat je verzet blijft op je toestel staan tot je het meegeeft. Twee manieren:
+
+```bash
+pbpaste | ./zet-labels.sh          # na "kopieer bordjes" — verwerkt en pusht
+```
+
+of **bewaar bestand**, dat de volledige `plan.geojson` teruggeeft; die
+versleutel je dan zelf met `node versleutel.mjs plan.geojson ACP`.
+
+Er komt geen correctielaag naast de kaart: de plek en de hoek gaan als
+`labelpunt` en `labelhoek` de kaartlaag zelf in. Dat betekent wel dat een
+volledige herbouw met `maak-vector.sh` ze overschrijft — draai die alleen bij
+een nieuwe versie van het plan.
+
+### De kaartlaag met de hand aanpassen
+
+```bash
+node vectorplan/open.mjs ACP            # plan.enc -> plan.geojson
+# … aanpassen …
+node versleutel.mjs plan.geojson ACP    # plan.geojson -> plan.enc
+```
+
+`plan.geojson` staat in `.gitignore`.
 
 ### Startwaarden
 
