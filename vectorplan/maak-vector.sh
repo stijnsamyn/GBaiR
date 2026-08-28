@@ -15,11 +15,11 @@ PY="${PY:-python3}"
 HIER="$(cd "$(dirname "$0")" && pwd)"
 mkdir -p "$WERK/uit"
 
-echo "1/7  renderen op 1000 dpi…"
+echo "1/9  renderen op 1000 dpi…"
 [ -f "$WERK/master-1.png" ] || pdftoppm -r 1000 -png -f 1 -l 1 "$PDF" "$WERK/master"
 [ -f "$WERK/r400-1.png"  ] || pdftoppm -r 400  -png -f 1 -l 1 "$PDF" "$WERK/r400"
 
-echo "2/7  bijsnijden op hetzelfde kader als kaart.webp…"
+echo "2/9  bijsnijden op hetzelfde kader als kaart.webp…"
 "$PY" - "$WERK" <<'PY'
 import sys
 from PIL import Image, ImageChops
@@ -36,29 +36,41 @@ groot.crop(kader).save(W + '/plan.png')
 print(f'     400 dpi bbox {vak}  ->  kader {kader}  ->  {kader[2]-kader[0]}x{kader[3]-kader[1]}')
 PY
 
-echo "3/7  blauwe straatnamen zoeken…";  "$PY" "$HIER/namen.py"    "$WERK"
-echo "4/7  zwarte gebouwcodes zoeken…";  "$PY" "$HIER/codes.py"    "$WERK"
-echo "5/7  gebouwen en zones…";          "$PY" "$HIER/gebouwen.py" "$WERK"
-                                          "$PY" "$HIER/zones.py"   "$WERK"
+echo "3/9  blauwe straatnamen zoeken…";  "$PY" "$HIER/namen.py"    "$WERK"
+echo "4/9  zwarte gebouwcodes zoeken…";  "$PY" "$HIER/codes.py"    "$WERK"
+echo "5/9  gebouwen, zones en terreinlijnwerk…"
+"$PY" "$HIER/gebouwen.py" "$WERK"
+"$PY" "$HIER/zones.py"    "$WERK"
+"$PY" "$HIER/terrein.py"  "$WERK"
 
 # De gelezen teksten zijn handwerk en horen bij de nummering van hierboven.
 # Verandert de tekening, dan schuiven de nummers en moeten de uitsneden opnieuw
 # gelezen worden — zie de bladen die blad2.py maakt.
 cp -n "$HIER/data/naamtekst.json" "$HIER/data/codetekst.json" "$WERK/uit/" 2>/dev/null || true
 
-echo "6/7  koppelen, straatassen laten groeien, samenvoegen…"
+echo "6/9  codes bij hun gebouw leggen en straatassen laten groeien…"
 "$PY" "$HIER/koppel.py"  "$WERK"
 "$PY" "$HIER/straten.py" "$WERK"
+
+echo "7/9  OpenStreetMap ophalen en het plan erop passen…"
+"$PY" "$HIER/osm.py"     "$WERK"
+"$PY" "$HIER/pas_osm.py" "$WERK"
+
+echo "8/9  samenvoegen tot één kaartlaag in echte coördinaten…"
 "$PY" "$HIER/bouw.py"    "$WERK"
 
-echo "7/7  versleutelen…"
+echo "9/9  versleutelen…"
 cp "$WERK/uit/plan.geojson" plan.geojson
 node versleutel.mjs plan.geojson "$WW"
 # Alleen de tussenbestanden bewaren, niet plan.geojson zelf: dat is de
 # onversleutelde kaartlaag en hoort niet in een publieke repo.
-for f in naamgroepen naamtekst codegroepen codetekst gebouwen zones straatankers; do
+for f in naamgroepen naamtekst codegroepen codetekst gebouwen zones terrein straatankers passing; do
   cp "$WERK/uit/$f.json" "$HIER/data/"
 done
 
 echo
+cp "$WERK/uit/plaatsing_voorstel.json" ./plaatsing_voorstel.json
+echo
 echo "Klaar. plan.enc staat klaar voor de repo; plan.geojson niet — die staat in .gitignore."
+echo "In plaatsing_voorstel.json staat de gevonden plaatsing van de plattegrond-"
+echo "afbeelding; zet die met ./zet-plaatsing.sh online als ze beter is dan de huidige."

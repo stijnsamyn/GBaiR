@@ -1,9 +1,9 @@
 {
-  "versie": 1,
-  "lat": 51.1862115,
-  "lon": 4.2085574,
-  "w": 1006,
-  "h": 912,
-  "rot": 0,
-  "opmerking": "beginwaarden uit OpenStreetMap (way 51686418), nog niet ingemeten"
+  "versie": 2,
+  "lat": 51.1864367,
+  "lon": 4.2079343,
+  "w": 1156.0,
+  "h": 1047.8,
+  "rot": 3.14,
+  "opmerking": "automatisch gepast op 100 OSM-gebouwen (mediaan 5,6 m); zie vectorplan/pas_osm.py"
 }

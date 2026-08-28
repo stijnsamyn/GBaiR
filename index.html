@@ -32,6 +32,7 @@
 </div>
 
 <div id="tools">
+  <button id="btnPlan"   aria-pressed="false" title="Toon de plattegrond eronder" hidden>▦</button>
   <button id="btnFollow" aria-pressed="false" title="Volg mijn positie">◎</button>
   <button id="btnWake"   aria-pressed="false" title="Scherm aan houden">☀</button>
   <a class="knop" href="instellingen.html" title="Kaart uitlijnen">⚙</a>
@@ -136,7 +137,7 @@ function vulLijst(vraag){
 }
 
 function springNaar(uv){
-  const ll = naarLatLng(uv);
+  const ll = punt(uv);
   map.setView(ll, Math.max(map.getZoom(), 19));
   if (flits) map.removeLayer(flits);
   flits = L.circleMarker(ll, { radius:16, color:'#ff8a00', weight:3, fill:false }).addTo(map);

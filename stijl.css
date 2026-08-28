@@ -65,7 +65,7 @@
   /* ---------------------------- vectorlaag ---------------------------- */
   .leaflet-div-icon.etiket{background:none;border:0;margin:0!important;
           width:0!important;height:0!important;overflow:visible}
-  .etiket span{position:absolute;transform:translate(-50%,-50%);
+  .etiket span{position:absolute;transform:translate(-50%,-50%);transform-origin:50% 50%;
           font-weight:600;white-space:nowrap;pointer-events:none;
           text-shadow:0 0 3px #fff,0 0 3px #fff,0 0 3px #fff,0 0 5px #fff}
   .etiket.straat span{font-size:12px;color:#0b4da2}

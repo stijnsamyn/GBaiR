@@ -164,6 +164,7 @@ if (!window.isSecureContext || !crypto.subtle){
  * 3. Vanaf hier draait alles pas als de kaart ontsleuteld is.
  * ------------------------------------------------------------------ */
 let overlay = null, verhouding = P.w / P.h, verhoudingVast = true;
+let overlayVerplaatst = false;      // heeft iemand de kaart al zelf versleept?
 
 const doorzicht = () => {
   const el = document.getElementById('op');
@@ -230,19 +231,32 @@ async function haalPlaatsing(){
  *    de plattegrond, dus dezelfde START-plaatsing geldt voor allebei.
  * ------------------------------------------------------------------ */
 let plan = null;                                   // de ontsleutelde GeoJSON
+/* De kaartlaag kan in twee stelsels staan. 'wgs84' is echte lengte- en
+   breedtegraad: die ligt al goed en beweegt niet mee met de uitlijning.
+   'plan' is de oude vorm, genormaliseerd over het kader van de tekening. */
+let stelsel = 'plan', refLat = START.lat, refLon = START.lon;
 const doek = L.canvas({ padding:.4 });
-const gZone   = L.layerGroup(), gVlak = L.layerGroup(), gLijn = L.layerGroup(),
-      gStraat = L.layerGroup(), gCode = L.layerGroup();
+const gTerrein = L.layerGroup(), gZone = L.layerGroup(), gVlak = L.layerGroup(),
+      gLijn = L.layerGroup(), gStraat = L.layerGroup(), gCode = L.layerGroup();
 const vormen = [];                                 // {laag, uv} om te herplaatsen
 const etiketten = [];                              // {marker, uv}
 let straten = [];                                  // {naam, delen:[[a,b],…]} in meters
 const straatEtiket = [];                           // om per zoomstand te tonen of te verbergen
 const CODE_VANAF = 18;      // gebouwcodes pas van dichtbij
-const NAAM_VANAF = 16;      // van hieraf één naam per straat
+const NAAM_VANAF = 16.5;    // van hieraf één naam per straat
 const ALLE_VANAF = 17.5;    // van hieraf elk naambordje
 
 /* genormaliseerde plancoördinaat -> plaatselijke meters (oost, noord), vóór draaiing */
 const naarMeter = ([u,v]) => [ (u - .5) * P.w, (.5 - v) * P.h ];
+
+/* Eén ingang voor allebei de stelsels. */
+const punt  = c => stelsel === 'wgs84' ? L.latLng(c[1], c[0]) : naarLatLng(c);
+const meter = c => stelsel === 'wgs84'
+      ? [ (c[0] - refLon) * mLon(refLat), (c[1] - refLat) * M_LAT ]
+      : naarMeter(c);
+const puntMeter = ll => stelsel === 'wgs84'
+      ? [ (ll.lng - refLon) * mLon(refLat), (ll.lat - refLat) * M_LAT ]
+      : naarVlak(ll);
 
 function naarLatLng([u,v]){
   const t = P.rot * Math.PI/180, c = Math.cos(t), s = Math.sin(t);
@@ -268,12 +282,20 @@ const STIJL = {
   zone:      { color:'#d9534f', weight:1,   fillColor:'#d9534f', fillOpacity:.10 },
   gebouw:    { color:'#46525f', weight:1,   fillColor:'#8d99a6', fillOpacity:.60 },
   bijgebouw: { color:'#6e7984', weight:.8,  fillColor:'#c2cad2', fillOpacity:.50 },
-  straat:    { color:'#4a86d8', weight:2.5, opacity:.55 }
+  straat:    { color:'#4a86d8', weight:2.5, opacity:.55 },
+  lijn:      { color:'#7c8894', weight:1,   opacity:.85 },   // grens, percelen, wegranden
+  boomrand:  { color:'#5c8a63', weight:1.2, opacity:.85 }
 };
+const TERREIN = { lijn:1, boomrand:1 };
 
 function bouwVector(data){
   if (!data || !data.features) return;
   plan = data;
+  if (data.stelsel === 'wgs84'){
+    stelsel = 'wgs84';
+    const pl = data.plaatsing;
+    if (pl){ refLat = pl.lat; refLon = pl.lon; }
+  }
   const perStraat = {};
 
   for (const k of data.features){
@@ -281,7 +303,7 @@ function bouwVector(data){
 
     if (g.type === 'Polygon'){
       const uv = g.coordinates[0];
-      const laag = L.polygon(uv.map(naarLatLng),
+      const laag = L.polygon(uv.map(punt),
                      Object.assign({ renderer:doek, interactive:s !== 'zone' }, STIJL[s] || STIJL.gebouw));
       if (k.properties.code) laag.bindTooltip(k.properties.code, { direction:'top' });
       laag.addTo(s === 'zone' ? gZone : gVlak);
@@ -291,14 +313,20 @@ function bouwVector(data){
         etiketten.push(voegEtiket(m, k.properties.code, 'code', gCode));
       }
 
+    } else if (g.type === 'LineString' && TERREIN[s]){
+      const uv = g.coordinates;
+      const laag = L.polyline(uv.map(punt),
+                     Object.assign({ renderer:doek, interactive:false }, STIJL[s])).addTo(gTerrein);
+      vormen.push({ laag, uv, ring:false });
+
     } else if (g.type === 'LineString'){
       const uv = g.coordinates;
-      const laag = L.polyline(uv.map(naarLatLng), Object.assign({ renderer:doek }, STIJL.straat)).addTo(gLijn);
+      const laag = L.polyline(uv.map(punt), Object.assign({ renderer:doek }, STIJL.straat)).addTo(gLijn);
       vormen.push({ laag, uv, ring:false });
       const naam = k.properties.naam;
       (perStraat[naam] = perStraat[naam] || []).push(uv);
       const e = voegEtiket(midden(uv), naam, 'straat', gStraat);
-      e.naam = naam; e.lengte = stukLengte(uv);
+      e.naam = naam; e.lengte = stukLengte(uv); e.langs = uv;
       etiketten.push(e); straatEtiket.push(e);
 
     } else if (g.type === 'Point'){
@@ -316,25 +344,60 @@ function bouwVector(data){
   for (const e of straatEtiket) e.hoofd = (langste[e.naam] === e);
   straatEtiket.sort((a,b) => (b.hoofd - a.hoofd) || (b.lengte - a.lengte));
 
-  gZone.addTo(map); gVlak.addTo(map); gLijn.addTo(map); gStraat.addTo(map);
+  if (/OpenStreetMap/i.test(data.bron || ''))
+    map.attributionControl.addAttribution('Gebouwen deels &copy; OpenStreetMap, ODbL');
+  gTerrein.addTo(map); gZone.addTo(map); gVlak.addTo(map); gLijn.addTo(map); gStraat.addTo(map);
+  lagenkiezer.addOverlay(gTerrein, 'Terrein');
   lagenkiezer.addOverlay(gZone,   'Zones');
   lagenkiezer.addOverlay(gVlak,   'Gebouwen');
   lagenkiezer.addOverlay(gLijn,   'Straten');
   lagenkiezer.addOverlay(gStraat, 'Straatnamen');
   lagenkiezer.addOverlay(gCode,   'Gebouwcodes');
-  // De vectorlaag draagt de namen nu zelf; de plattegrond eronder zou ze
-  // een tweede keer tonen. Hij blijft één tik ver, via het lagenknopje.
+  // De vectorlaag draagt de namen nu zelf; de plattegrond eronder zou ze een
+  // tweede keer tonen. Hij staat dus uit, maar wel achter een eigen knop --
+  // in het lagenmenu was hij niet te vinden.
   if (overlay){ lagenkiezer.addOverlay(overlay, 'Plattegrond'); map.removeLayer(overlay); }
+  const knop = document.getElementById('btnPlan');
+  if (knop && overlay){
+    knop.hidden = false;
+    knop.onclick = () => {
+      const aan = !map.hasLayer(overlay);
+      if (aan) overlay.addTo(map); else map.removeLayer(overlay);
+      knop.setAttribute('aria-pressed', aan);
+      melden(aan ? 'Plattegrond eronder' : 'Alleen de kaartlaag');
+    };
+  }
+  if (stelsel === 'wgs84' && !overlayVerplaatst){
+    const b = L.latLngBounds([]);
+    gVlak.eachLayer(l => b.extend(l.getBounds()));
+    gTerrein.eachLayer(l => b.extend(l.getBounds()));
+    if (b.isValid()) map.fitBounds(b.pad(.04));
+  }
   regelZoom();
   naVector();
   melden(straten.length + ' straten geladen');
 }
 
 function voegEtiket(uv, tekst, soort, groep){
-  const m = L.marker(naarLatLng(uv), { interactive:false, keyboard:false,
+  const m = L.marker(punt(uv), { interactive:false, keyboard:false,
               icon: L.divIcon({ className:'etiket ' + soort, iconSize:[0,0],
                                 html:'<span>' + ontsmet(tekst) + '</span>' }) }).addTo(groep);
   return { marker:m, uv };
+}
+
+/* Een straatnaam hoort langs zijn straat te liggen, en nooit op zijn kop.
+   De hoek is die van het lijnstuk op het scherm; die verandert alleen als de
+   plaatsing draait, niet bij zoomen. */
+function draaiEtiket(e){
+  if (!e.langs || e.langs.length < 2) return;
+  const a = map.project(punt(e.langs[0]), 18);
+  const b = map.project(punt(e.langs[e.langs.length - 1]), 18);
+  let hoek = Math.atan2(b.y - a.y, b.x - a.x) * 180 / Math.PI;
+  if (hoek > 90) hoek -= 180;
+  if (hoek < -90) hoek += 180;
+  e.hoek = hoek;
+  const span = e.marker.getElement() && e.marker.getElement().firstChild;
+  if (span) span.style.transform = 'translate(-50%,-50%) rotate(' + hoek.toFixed(1) + 'deg)';
 }
 const ontsmet = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
@@ -348,7 +411,7 @@ const midden = uv => [ (uv[0][0] + uv[uv.length-1][0])/2, (uv[0][1] + uv[uv.leng
 function stukLengte(uv){                           // in meter, over het hele lijnstuk
   let s = 0;
   for (let i = 0; i < uv.length-1; i++){
-    const a = naarMeter(uv[i]), b = naarMeter(uv[i+1]);
+    const a = meter(uv[i]), b = meter(uv[i+1]);
     s += Math.hypot(b[0]-a[0], b[1]-a[1]);
   }
   return s;
@@ -356,9 +419,13 @@ function stukLengte(uv){                           // in meter, over het hele li
 
 /* de plaatsing is veranderd (uitlijnen) — alles opnieuw op de aarde zetten */
 function plaatsVector(){
+  if (stelsel === 'wgs84'){          // ligt al op de aarde; de uitlijning raakt hem niet
+    for (const e of etiketten) draaiEtiket(e);
+    return;
+  }
   for (const v of vormen)
-    v.laag.setLatLngs(v.ring ? [v.uv.map(naarLatLng)] : v.uv.map(naarLatLng));
-  for (const e of etiketten) e.marker.setLatLng(naarLatLng(e.uv));
+    v.laag.setLatLngs(v.ring ? [v.uv.map(punt)] : v.uv.map(punt));
+  for (const e of etiketten){ e.marker.setLatLng(punt(e.uv)); draaiEtiket(e); }
 }
 
 /* Van ver zijn 91 naambordjes één zwarte vlek. Van dichtbij mag alles.
@@ -369,17 +436,25 @@ function regelZoom(){
   if (codes && !map.hasLayer(gCode)) gCode.addTo(map);
   if (!codes && map.hasLayer(gCode)) map.removeLayer(gCode);
 
-  // dezelfde naam twee keer vlak naast elkaar helpt niemand
+  // Bordjes die elkaar overlappen helpen niemand. De belangrijkste straat komt
+  // eerst aan bod (straatEtiket is daarop gesorteerd), dus die wint een plek.
+  // Dezelfde naam moet verder uit elkaar staan dan twee verschillende.
   const gehouden = [];
+  const breed = e => 3.6 * e.naam.length + 16;      // ruwe breedte van het bordje
   for (const e of straatEtiket){
     let wil = z >= ALLE_VANAF || (z >= NAAM_VANAF && e.hoofd);
-    if (wil && !e.hoofd){
-      const q = map.latLngToContainerPoint(e.marker.getLatLng());
-      for (const g of gehouden)
-        if (g.naam === e.naam && q.distanceTo(g.punt) < 150){ wil = false; break; }
+    let q = null;
+    if (wil){
+      q = map.latLngToContainerPoint(e.marker.getLatLng());
+      if (q.x < -200 || q.y < -200 || q.x > map.getSize().x + 200 || q.y > map.getSize().y + 200){
+        wil = false;                                 // buiten beeld hoeft niet
+      } else for (const g of gehouden){
+        const nodig = g.naam === e.naam ? 150 : (breed(e) + breed(g.el)) / 2 + 10;
+        if (q.distanceTo(g.punt) < nodig){ wil = false; break; }
+      }
     }
-    if (wil) gehouden.push({ naam:e.naam, punt:map.latLngToContainerPoint(e.marker.getLatLng()) });
-    if (wil && !gStraat.hasLayer(e.marker)) gStraat.addLayer(e.marker);
+    if (wil) gehouden.push({ naam:e.naam, el:e, punt:q });
+    if (wil && !gStraat.hasLayer(e.marker)){ gStraat.addLayer(e.marker); draaiEtiket(e); }
     if (!wil && gStraat.hasLayer(e.marker)) gStraat.removeLayer(e.marker);
   }
 }
@@ -394,12 +469,12 @@ function afstandTotStuk(p, a, b){
 
 function dichtsteStraat(ll){
   if (!straten.length) return null;
-  const p = naarVlak(ll);
+  const p = puntMeter(ll);
   let best = null, bestd = Infinity;
   for (const s of straten)
     for (const deel of s.delen)
       for (let i = 0; i < deel.length-1; i++){
-        const d = afstandTotStuk(p, naarMeter(deel[i]), naarMeter(deel[i+1]));
+        const d = afstandTotStuk(p, meter(deel[i]), meter(deel[i+1]));
         if (d < bestd){ bestd = d; best = s.naam; }
       }
   return { naam:best, afstand:bestd };

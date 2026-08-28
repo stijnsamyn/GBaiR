@@ -21,6 +21,7 @@ staan in geen enkele kaartdienst — vandaar deze pagina.
 | `plan.enc` | de versleutelde **vectorlaag**: straten, gebouwen en zones als kaartdata |
 | `maak-kaart.sh` | PDF → 400 dpi → bijsnijden → webp → versleutelen |
 | `vectorplan/` | de pijplijn die van dezelfde PDF de vectorlaag maakt |
+| `vectorplan/osm.py`, `pas_osm.py` | OpenStreetMap ophalen en het plan erop leggen |
 | `versleutel.mjs` | los te gebruiken als je alleen opnieuw wil versleutelen |
 | `sw.js` | offline cache van de pagina, de kaart en bezochte luchtfototegels |
 | `vendor/` | Leaflet 1.9.4 lokaal, zodat er geen CDN nodig is |
@@ -60,9 +61,9 @@ geven. Zet in Instellingen → Safari ook "Exacte locatie" aan.
 ## De vectorlaag
 
 De pagina toont geen ingescand beeld meer, maar echte kaartdata: **60 straten,
-131 gebouwvlakken met hun `MG`-code, en 3 zones**. Dat is 52 kB in plaats van
-784 kB, het blijft scherp op elke zoom, en het levert drie dingen op die een
-beeld niet kan:
+209 gebouwen, 336 terreinlijnen en 3 zones**, in echte lengte- en breedtegraad.
+Dat is 133 kB in plaats van 784 kB, het blijft scherp op elke zoom, en het
+levert drie dingen op die een beeld niet kan:
 
 * **Zoeken.** Het veld bovenaan zoekt op straatnaam én op gebouwcode. Tik een
   stuk van een naam of een `MG`-nummer en de kaart springt erheen met een
@@ -70,20 +71,43 @@ beeld niet kan:
 * **In welke straat sta je.** De statusbalk toont naast de gps-nauwkeurigheid
   de dichtstbijzijnde straat — binnen 18 m als `· <straat>`, daarbuiten als
   `· bij <straat>`.
-* **Leesbare namen.** Ze staan altijd horizontaal in plaats van gedraaid mee
-  met de straat, en ze verschijnen naar zoomniveau: niets als je het hele
-  terrein ziet, één naam per straat vanaf zoom 16, alle bordjes vanaf 17,5.
-  Gebouwcodes komen erbij vanaf zoom 18. Dezelfde naam twee keer vlak naast
-  elkaar wordt onderdrukt.
+* **Leesbare namen.** Ze lopen langs hun straat mee en staan nooit op hun kop.
+  Ze verschijnen naar zoomniveau: niets als je het hele terrein ziet, één naam
+  per straat vanaf zoom 16,5, alle bordjes vanaf 17,5. Gebouwcodes komen erbij
+  vanaf zoom 18. Bordjes die elkaar zouden overlappen vallen weg, de
+  belangrijkste straat eerst.
 
 De oude plattegrond staat er nog wel in en is **uit bij het openen** — anders
 toont hij elke naam een tweede keer. Zet hem aan met het lagenknopje
 rechtsboven; hij heeft detail dat de vectorlaag niet heeft (boomranden,
 perceelgrenzen, het spoor).
 
-De coördinaten in `plan.enc` lopen van 0 tot 1 over hetzelfde kader als
-`kaart.webp`. Daardoor geldt `START` voor allebei en verschuift de uitlijnmodus
-de vectoren mee met het beeld.
+### Waar de gebouwen vandaan komen
+
+Waar OpenStreetMap het gebouw al kent, gebruiken we **die** omtrek. Die ligt
+juist op de aarde, en dat is precies wat een tekening niet kan geven. Van het
+plan komt dan alleen wat OSM níet heeft: de `MG`-code.
+
+| | |
+|---|---|
+| 78 | uit OSM, met de code van het plan erbij |
+| 53 | uit de tekening — OSM kent ze niet |
+| 78 | uit OSM, zonder code — het plan benoemt ze niet |
+
+OSM kan de inhoud van dit plan niet leveren: binnen het domein staan daar
+**156 gebouwen, 8 wegen en nul namen of refs**. De straatnamen die OSM er wel
+heeft zijn de echte wegen eromheen, geen enkele van de 60 namen van het
+oefendorp. Omgekeerd kan het plan de ligging niet leveren. Samen wel.
+
+Gebouwomtrekken van OpenStreetMap staan onder ODbL; de bronvermelding staat
+in de kaart en hier.
+
+### De coördinaten
+
+`plan.enc` staat in **echte lengte- en breedtegraad**. De kaartlaag hangt dus
+niet meer af van een uitlijning achteraf — ze ligt goed zodra ze geladen is.
+`plaatsing.json` gaat alleen nog over de plattegrond-afbeelding die je eronder
+kan leggen.
 
 ### Hoe die laag gemaakt is
 
@@ -98,6 +122,8 @@ gebruikt).
 | gebouwen | grijze en roze vlakken; arceergaten dichten, dan opensnijden op de zwarte omtrek |
 | gebouwcodes | zwarte bloktekst, gescheiden van het lijnwerk op grootte |
 | straatassen | de naam staat middenop de weg — vanuit het label langs zijn eigen richting groeien tot de doorgang dichtloopt |
+| terreinlijnen | wat er aan zwart lijnwerk overblijft als gebouwen en tekst eraf zijn, uitgedund tot één pixel en afgelopen |
+| ligging | de gebouwen van het plan op die van OSM leggen (ICP), zie hieronder |
 
 De namen en codes zijn met de hand van de uitsneden gelezen, niet met OCR: die
 tekst is klein, staat onder willekeurige hoeken en loopt door lijnwerk heen, en
@@ -150,6 +176,34 @@ pijltjes, `+`/`−` (grootte) en `↺`/`↻` (draaiing). Met **stap: fijn** ga j
 
 Herkenbare ankerpunten op de luchtfoto: het voetbalveld linksonder op het plan,
 de langgerekte ovale structuur rechtsboven, en de toegangsweg ("Ingang") links.
+
+### Automatisch, op OpenStreetMap
+
+`vectorplan/pas_osm.py` legt het plan op zijn plaats door de zwaartepunten van
+de getekende gebouwen te laten samenvallen met die van OSM. Eerst een grove gok
+uit de vorm van beide puntenwolken, dan ICP: telkens elk gebouw aan zijn
+dichtstbijzijnde buur koppelen en de passing opnieuw uitrekenen.
+
+Twee dingen zijn daarbij nodig gebleken. De passing moet **een gelijkvormigheid
+zijn, geen affiene afbeelding** — die laatste mag scheeftrekken en praat dan
+verkeerde koppels goed in plaats van ze af te wijzen. En het plan moet in **zijn
+eigen verhouding** meedoen, niet genormaliseerd, anders wordt het vóór het
+matchen al platgedrukt.
+
+Het resultaat op deze tekening:
+
+```
+gekoppeld            100 van de 131 gebouwen
+afwijking            mediaan 5,6 m, gemiddeld 10,4 m
+scheeftrekking       0,53°   (die een vrije affiene passing zou willen)
+verhouding           1,1088  (de tekening zelf: 1,1032)
+```
+
+**Daarmee is de vraag hieronder beantwoord: het plan is ingemeten, niet los
+getekend.** Over 1,1 km wil de vrije passing maar een halve graad scheefte en
+een half procent verhoudingsverschil. Eén plaatsing klopt dus overal tegelijk.
+De 5,6 m die overblijft is ongeveer de nauwkeurigheid van OSM zelf, want die
+gebouwen zijn van luchtfoto's overgetrokken.
 
 ### Met controlepunten
 
