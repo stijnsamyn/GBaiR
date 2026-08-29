@@ -32,6 +32,7 @@
 </div>
 
 <div id="tools">
+  <select id="kaartkeuze" aria-label="Spring naar een kaart" hidden></select>
   <button id="btnPlan"   aria-pressed="false" title="Toon de plattegrond eronder" hidden>▦</button>
   <button id="btnFollow" aria-pressed="false" title="Volg mijn positie">◎</button>
   <button id="btnWake"   aria-pressed="false" title="Scherm aan houden">☀</button>
@@ -43,7 +44,6 @@
     <img src="icons/icon-192.png" alt="">
     <h1>WTC — straatnamen</h1>
     <p>De plattegrond is versleuteld. Geef het wachtwoord.</p>
-    <select id="kaartkeuze" aria-label="Welke kaart"></select>
     <input id="ww" type="password" inputmode="text" autocomplete="current-password"
            enterkeyhint="go" autocapitalize="characters" spellcheck="false"
            aria-label="Wachtwoord" placeholder="wachtwoord">
@@ -116,13 +116,13 @@ function vulLijst(vraag){
   const rijen = [];
   for (const s of straten)
     if (!q || s.naam.toLowerCase().includes(q)) rijen.push({ naam:s.naam, bij:'straat', doel:midden(s.delen[0]) });
-  if (plan)
-    for (const k of plan.features){
+  // over alle geladen kaarten zoeken, niet alleen die waar je nu naar kijkt
+  for (const k of Object.values(kaartlagen).flatMap(l => l.features)){
       const c = k.properties.code;
       if (!c || (q && !c.toLowerCase().includes(q))) continue;
       const uv = k.geometry.type === 'Point' ? k.geometry.coordinates : zwaartepunt(k.geometry.coordinates[0]);
       rijen.push({ naam:c, bij:'gebouw', doel:uv });
-    }
+  }
   rijen.sort((a,b) => a.naam.localeCompare(b.naam, 'nl'));
   treffers.innerHTML = '';
   for (const r of rijen.slice(0, 40)){

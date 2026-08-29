@@ -114,7 +114,7 @@ if ver: print(f'  {ver} ways weken meer dan 3 m af en zijn overgeslagen')
 # ---------- straten van het plan ----------
 ankers = json.load(open(S + '/uit/straatankers.json'))
 def richting(seg):
-    (x1, y1), (x2, y2) = seg
+    (x1, y1), (x2, y2) = seg[0], seg[-1]      # ook voor stukken met meer punten
     return math.degrees(math.atan2(y2 - y1, x2 - x1)) % 180
 def hoekverschil(a, b):
     d = abs(a - b) % 180
@@ -125,6 +125,7 @@ def samenvoegen(segs):
         veranderd = False
         for i in range(len(segs)):
             for j in range(i + 1, len(segs)):
+                if len(segs[i]) != 2 or len(segs[j]) != 2: continue
                 A, B = np.array(segs[i], float), np.array(segs[j], float)
                 if hoekverschil(richting(A), richting(B)) > 14: continue
                 d = A[1] - A[0]; L = np.hypot(*d)
@@ -141,6 +142,51 @@ def samenvoegen(segs):
             if veranderd: break
     return segs
 
+def rijg_aaneen(straten, gat=950, hoekmarge=62):
+    """Rijgt de stukken van één straat aan elkaar tot één doorlopende lijn.
+
+    Elk naambordje laat zijn eigen stuk groeien, dus een straat met drie
+    bordjes komt er als drie losse stukken uit -- BOSWEG, DEN DRIES,
+    BRUGGELAAN. Waar twee uiteinden dicht bij elkaar liggen en ongeveer in
+    elkaars verlengde, horen ze aan elkaar. Ligt er een groot gat of maakt de
+    verbinding een scherpe knik, dan blijven het aparte stukken: dan is het
+    waarschijnlijk echt een onderbroken straat.
+    """
+    def richt(pad, kant):
+        a = np.array(pad[0 if kant == 0 else -1], float)
+        b = np.array(pad[1 if kant == 0 else -2], float)
+        d = a - b; L = np.hypot(*d)
+        return d / L if L > 1e-9 else np.array([1.0, 0.0])
+    geregen = 0
+    for naam, ss in straten.items():
+        bezig = True
+        while bezig and len(ss) > 1:
+            bezig = False
+            beste = None
+            for i in range(len(ss)):
+                for j in range(len(ss)):
+                    if i == j: continue
+                    for ki in (0, 1):
+                        for kj in (0, 1):
+                            pi = np.array(ss[i][0 if ki == 0 else -1], float)
+                            pj = np.array(ss[j][0 if kj == 0 else -1], float)
+                            d = np.hypot(*(pj - pi))
+                            if d > gat: continue
+                            if d > 1e-6:
+                                e = (pj - pi) / d
+                                # de verbinding moet vooruit lopen voor allebei
+                                if float(richt(ss[i], ki) @ e) < np.cos(np.radians(hoekmarge)): continue
+                                if float(richt(ss[j], kj) @ -e) < np.cos(np.radians(hoekmarge)): continue
+                            if beste is None or d < beste[0]: beste = (d, i, j, ki, kj)
+            if beste:
+                _, i, j, ki, kj = beste
+                a = list(ss[i]); b = list(ss[j])
+                if ki == 0: a.reverse()
+                if kj == 1: b.reverse()
+                ss[i] = a + b
+                ss.pop(j); geregen += 1; bezig = True
+    return geregen
+
 def sluit_aan(straten, reik=310, hoekmarge=25):
     """Trekt losse straateinden door tot ze een andere straat raken.
 
@@ -156,15 +202,16 @@ def sluit_aan(straten, reik=310, hoekmarge=25):
     for naam, ss in straten.items():
         for s in ss:
             A = np.array(s, float)
-            for kant in (0, 1):
-                p0 = A[kant]; richt = A[kant] - A[1 - kant]
+            for kant in (0, -1):
+                buur = 1 if kant == 0 else -2
+                p0 = A[kant]; richt = A[kant] - A[buur]
                 L = np.hypot(*richt)
                 if L < 1: continue
                 e = richt / L
                 beste = None
                 for anaam, B in alle:
-                    if anaam == naam and np.allclose(B, A): continue
-                    d = B[1] - B[0]; BL = np.hypot(*d)
+                    if anaam == naam and B.shape == A.shape and np.allclose(B, A): continue
+                    d = B[-1] - B[0]; BL = np.hypot(*d)
                     if BL < 1: continue
                     be = d / BL; bn = np.array([-be[1], be[0]])
                     noem = e @ bn
@@ -185,15 +232,20 @@ straten = {}
 for A in ankers: straten.setdefault(A['naam'], []).append(A['as'])
 voor = sum(len(v) for v in straten.values())
 for naam in straten: straten[naam] = samenvoegen(straten[naam])
+geregen = rijg_aaneen(straten)
 getrokken = sluit_aan(straten)
 print(f'straatstukken van het plan: {voor} -> {sum(len(v) for v in straten.values())}, '
-      f'{getrokken} losse einden doorgetrokken, '
+      f'{geregen} stukken aaneengeregen, {getrokken} losse einden doorgetrokken, '
       f'({len(straten)} straatnamen)')
 dubbel = sorted(set(straten) & osm_straatnamen)
 if dubbel: print(f'  ook al in OSM: {", ".join(dubbel)}')
+# Een plein is een open ruimte, geen weg; er hoort geen wegdek van zeven meter
+# doorheen. De naam blijft staan en zoeken blijft werken.
+PLEINWOORD = ('PLEIN', 'PARADE')
 for naam, segs in sorted(straten.items()):
+    soort = 'plein' if any(w in naam.upper() for w in PLEINWOORD) else 'straat'
     for seg in segs:
-        voeg('straat', {'type': 'LineString', 'coordinates': [naar(p) for p in seg]},
+        voeg(soort, {'type': 'LineString', 'coordinates': [naar(p) for p in seg]},
              naam=naam, bron='plan')
 
 # ---------- gebouwen ----------

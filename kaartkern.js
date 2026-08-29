@@ -33,8 +33,13 @@ const KAARTEN = {
   leopoldsburg: { titel:'Leopoldsburg', vector:'leopoldsburg.enc' },
   houthulst: { titel:'Klerken (proef)', vector:'houthulst.enc' }
 };
+/* De drie kaarten liggen ver uit elkaar in het land, dus ze kunnen samen in
+   één sessie. Je kiest niet vooraf: alles staat er, en welke je ziet hangt af
+   van waar je kijkt. ?kaart= bepaalt alleen nog waar de kaart opent. */
 const KAARTSLEUTEL = (new URLSearchParams(location.search).get('kaart') || 'wtc');
 const KAART = KAARTEN[KAARTSLEUTEL] || KAARTEN.wtc;
+const kaartlagen = {};        // sleutel -> { titel, features, omhullende }
+let actieveKaart = KAARTSLEUTEL;
 
 const PLAATSING = KAART.plaatsing;
 const BESTAND = KAART.beeld;    // gemaakt met: node versleutel.mjs kaart.webp <wachtwoord>
@@ -135,29 +140,32 @@ async function uitpakken(plat){
 
 // De vectorlaag is platte tekst zodra hij ontsleuteld is; hij zit achter
 // hetzelfde wachtwoord als het beeld, en is meteen de toets of dat klopt.
-async function ontsleutelVector(wachtwoord){
-  const { plat } = await ontsleutelRuw(VECTOR, wachtwoord);
+async function ontsleutelVector(wachtwoord, bestand){
+  const { plat } = await ontsleutelRuw(bestand || VECTOR, wachtwoord);
   return JSON.parse(new TextDecoder().decode(await uitpakken(plat)));
 }
 
-/* welke kaart je opent, kies je voor het slot */
+/* Alle kaarten staan er; de lijst is om ergens heen te springen, niet om
+   vooraf te kiezen. Ze wordt gevuld zodra een kaart geladen is. */
 const keuze = document.getElementById('kaartkeuze');
-if (keuze){
-  for (const [sleutel, k] of Object.entries(KAARTEN)){
+function vulKaartkeuze(){
+  if (!keuze) return;
+  keuze.innerHTML = '';
+  for (const [sleutel, laag] of Object.entries(kaartlagen)){
     const o = document.createElement('option');
-    o.value = sleutel; o.textContent = k.titel;
-    if (sleutel === KAARTSLEUTEL) o.selected = true;
+    o.value = sleutel; o.textContent = laag.titel;
+    if (sleutel === actieveKaart) o.selected = true;
     keuze.appendChild(o);
   }
-  keuze.onchange = () => {
-    const u = new URL(location.href);
-    u.searchParams.set('kaart', keuze.value);
-    location.href = u.toString();
-  };
+  keuze.hidden = Object.keys(kaartlagen).length < 2;
 }
-document.title = KAART.titel;
-const kop = document.querySelector('#slot h1');
-if (kop) kop.textContent = KAART.titel;
+if (keuze) keuze.onchange = () => {
+  const laag = kaartlagen[keuze.value];
+  if (laag && laag.omhullende.isValid()){
+    map.fitBounds(laag.omhullende.pad(.05));
+    melden('Naar ' + laag.titel);
+  }
+};
 
 const slot = document.getElementById('slot');
 const fout = document.getElementById('slotfout');
@@ -175,7 +183,14 @@ async function probeer(wachtwoord, stil){
     try { localStorage.setItem(SLEUTELKEY, wachtwoord); } catch(e){}
     slot.classList.add('weg');
     start(url);
-    bouwVector(data);
+    bouwVector(data, KAARTSLEUTEL);
+    // de andere kaarten komen erbij zodra ze er zijn; de eerste bepaalt de blik
+    for (const [sleutel, k] of Object.entries(KAARTEN)){
+      if (sleutel === KAARTSLEUTEL) continue;
+      ontsleutelVector(wachtwoord, k.vector)
+        .then(d => bouwVector(d, sleutel))
+        .catch(() => melden('Kaart ' + k.titel + ' kon niet geladen worden', 'warn'));
+    }
     return true;
   } catch(e){
     try { localStorage.removeItem(SLEUTELKEY); } catch(err){}
@@ -398,9 +413,12 @@ const GRENSLIJN = { lijn:1, boomrand:1 };
    mogen niet tot zoom 18 wachten zoals de gewone gebouwcodes. */
 const FTX = s => /^ftx_/.test(s);
 
-function bouwVector(data){
+function bouwVector(data, sleutel){
   if (!data || !data.features) return;
+  sleutel = sleutel || KAARTSLEUTEL;
   plan = data;
+  kaartlagen[sleutel] = { titel:(KAARTEN[sleutel] || {}).titel || sleutel,
+                          features:data.features, omhullende:L.latLngBounds([]) };
   if (data.stelsel === 'wgs84'){
     stelsel = 'wgs84';
     const pl = data.plaatsing;
@@ -423,6 +441,7 @@ function bouwVector(data){
                                      interactive:s !== 'zone' }, stijl));
       if (s === 'ftx_gebouw')
         laag.bindTooltip(k.properties.echt ? 'reëel gebouw' : 'fictief gebouw', { direction:'top' });
+      laag.__kaart = sleutel;
       if (k.properties.code) laag.bindTooltip(k.properties.code, { direction:'top' });
       laag.addTo(s === 'zone' ? gZone : gVlak);
       vormen.push({ laag, uv, ring:true, kenmerk:k });
@@ -437,6 +456,17 @@ function bouwVector(data){
                      Object.assign({ renderer:GRENSLIJN[s] ? doekGrens : doekBoven,
                                      interactive:false }, STIJL[s])).addTo(gTerrein);
       vormen.push({ laag, uv, ring:false });
+
+    } else if (g.type === 'LineString' && s === 'plein'){
+      // Een plein is een open ruimte; er hoort geen wegdek doorheen. Alleen
+      // de naam, en zoeken en 'in welke straat sta ik' blijven werken.
+      const uv = g.coordinates;
+      const naam = k.properties.naam;
+      (perStraat[naam] = perStraat[naam] || []).push(uv);
+      const e = voegEtiket(k.properties.labelpunt || midden(uv), naam, 'straat plein', gStraat);
+      e.naam = naam; e.lengte = stukLengte(uv); e.langs = uv; e.kenmerk = k;
+      if (typeof k.properties.labelhoek === 'number') e.vasteHoek = k.properties.labelhoek;
+      etiketten.push(e); straatEtiket.push(e);
 
     } else if (g.type === 'LineString'){
       const uv = g.coordinates;
@@ -476,7 +506,13 @@ function bouwVector(data){
     }
   }
 
-  straten = Object.entries(perStraat).map(([naam, delen]) => ({ naam, delen }));
+  // de straten van alle kaarten samen; ze liggen ver uit elkaar, dus de
+  // dichtstbijzijnde is altijd die van de kaart waar je staat
+  for (const [naam, delen] of Object.entries(perStraat)){
+    const bestaat = straten.find(s => s.naam === naam && s.kaart === sleutel);
+    if (bestaat) bestaat.delen.push(...delen);
+    else straten.push({ naam, delen, kaart:sleutel });
+  }
   straten.sort((a,b) => a.naam.localeCompare(b.naam, 'nl'));
 
   // per straat draagt het langste stuk de naam die als eerste verschijnt
@@ -511,7 +547,9 @@ function bouwVector(data){
       melden(aan ? 'Plattegrond eronder' : 'Alleen de kaartlaag');
     };
   }
-  if (stelsel === 'wgs84' && !overlayVerplaatst){
+  { const b = kaartlagen[sleutel].omhullende;
+    gVlak.eachLayer(l => { if (l.__kaart === sleutel) b.extend(l.getBounds()); }); }
+  if (stelsel === 'wgs84' && sleutel === KAARTSLEUTEL && !overlayVerplaatst){
     /* Overpass geeft hele wegen terug zodra één knoop in de bak ligt, dus de
        uiterste hoeken liggen kilometers verderop. Op de omhullende inzoomen
        opent de kaart dan op de hele gemeente. Daarom het dichte midden: de
@@ -532,6 +570,8 @@ function bouwVector(data){
   veelVlakken = gVlak.getLayers().length > VEEL_VLAKKEN;
   regelBand();
   regelZoom();
+  vulKaartkeuze();
+  kiesActieve();
   naVector();
   melden(straten.length + ' straten geladen');
 }
@@ -672,6 +712,28 @@ function vakVan(e, q, breedte){
 const botst = (a, b) => Math.abs(a.x - b.x) < a.hw + b.hw &&
                         Math.abs(a.y - b.y) < a.hh + b.hh;
 map.on('zoomend moveend', regelZoom);
+
+/* Met drie kaarten in één sessie is 'de kaart' die waar je naar kijkt. De
+   bewerkers op de instellingenpagina werken op die ene, en de nummering van
+   hun kenmerken blijft daardoor kloppen. */
+function kiesActieve(){
+  const c = map.getCenter();
+  let best = null, bestd = Infinity;
+  for (const [sleutel, laag] of Object.entries(kaartlagen)){
+    if (!laag.omhullende.isValid()) continue;
+    const m = laag.omhullende.getCenter();
+    const d = map.distance(c, m);
+    if (laag.omhullende.contains(c)){ best = sleutel; bestd = -1; break; }
+    if (d < bestd){ bestd = d; best = sleutel; }
+  }
+  if (best && best !== actieveKaart){
+    actieveKaart = best;
+    plan = { type:'FeatureCollection', stelsel:'wgs84', features:kaartlagen[best].features };
+    const el = document.getElementById('welkekaart');
+    if (el) el.textContent = kaartlagen[best].titel;
+  }
+}
+map.on('moveend', kiesActieve);
 /* Een straat is geen lijn maar een strook van een meter of zeven. Ze wordt dus
    in meters getekend en niet in beeldpunten: zoom je in, dan wordt ze breder,
    net als de gebouwen eronder. */
