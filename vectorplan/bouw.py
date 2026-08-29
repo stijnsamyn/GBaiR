@@ -126,11 +126,13 @@ def samenvoegen(segs):
         for i in range(len(segs)):
             for j in range(i + 1, len(segs)):
                 A, B = np.array(segs[i], float), np.array(segs[j], float)
-                if hoekverschil(richting(A), richting(B)) > 8: continue
+                if hoekverschil(richting(A), richting(B)) > 14: continue
                 d = A[1] - A[0]; L = np.hypot(*d)
                 if L < 1: continue
                 e = d / L; n = np.array([-e[1], e[0]])
-                if max(abs(n @ (B[0] - A[0])), abs(n @ (B[1] - A[0]))) > 26: continue
+                # ~4,5 m dwars: twee tekeningen van dezelfde straat liggen zelden
+                # exact op elkaar, en 26 px liet ze als aparte straat staan
+                if max(abs(n @ (B[0] - A[0])), abs(n @ (B[1] - A[0]))) > 40: continue
                 tt = [e @ (B[0] - A[0]), e @ (B[1] - A[0])]
                 if min(tt) > L + 70 or max(tt) < -70: continue
                 proj = (np.vstack([A, B]) - A[0]) @ e
@@ -139,11 +141,53 @@ def samenvoegen(segs):
             if veranderd: break
     return segs
 
+def sluit_aan(straten, reik=310, hoekmarge=25):
+    """Trekt losse straateinden door tot ze een andere straat raken.
+
+    De assen groeien vanuit hun naambordje tot de doorgang dichtloopt, en dat
+    gebeurt vaak nét voor het kruispunt. Dan blijft er een wit uiteinde met een
+    grijs ringetje midden op de kruising staan. Doortrekken mag alleen recht
+    vooruit -- de richting van het stuk zelf -- want een bocht verzinnen zou
+    een verbinding suggereren die op de tekening niet staat. reik is 310 px,
+    ongeveer 35 m.
+    """
+    alle = [(naam, np.array(s, float)) for naam, ss in straten.items() for s in ss]
+    getrokken = 0
+    for naam, ss in straten.items():
+        for s in ss:
+            A = np.array(s, float)
+            for kant in (0, 1):
+                p0 = A[kant]; richt = A[kant] - A[1 - kant]
+                L = np.hypot(*richt)
+                if L < 1: continue
+                e = richt / L
+                beste = None
+                for anaam, B in alle:
+                    if anaam == naam and np.allclose(B, A): continue
+                    d = B[1] - B[0]; BL = np.hypot(*d)
+                    if BL < 1: continue
+                    be = d / BL; bn = np.array([-be[1], be[0]])
+                    noem = e @ bn
+                    if abs(noem) < 1e-6: continue
+                    afst = ((B[0] - p0) @ bn) / noem          # hoever vooruit tot die lijn
+                    if not (0 < afst <= reik): continue
+                    snij = p0 + afst * e
+                    langs = (snij - B[0]) @ be
+                    if not (-20 <= langs <= BL + 20): continue  # binnen dat stuk
+                    if hoekverschil(richting(A), richting(B)) < hoekmarge: continue  # bijna evenwijdig
+                    if beste is None or afst < beste[0]: beste = (afst, snij)
+                if beste:
+                    s[kant] = [float(beste[1][0]), float(beste[1][1])]
+                    getrokken += 1
+    return getrokken
+
 straten = {}
 for A in ankers: straten.setdefault(A['naam'], []).append(A['as'])
 voor = sum(len(v) for v in straten.values())
 for naam in straten: straten[naam] = samenvoegen(straten[naam])
-print(f'straatstukken van het plan: {voor} -> {sum(len(v) for v in straten.values())} '
+getrokken = sluit_aan(straten)
+print(f'straatstukken van het plan: {voor} -> {sum(len(v) for v in straten.values())}, '
+      f'{getrokken} losse einden doorgetrokken, '
       f'({len(straten)} straatnamen)')
 dubbel = sorted(set(straten) & osm_straatnamen)
 if dubbel: print(f'  ook al in OSM: {", ".join(dubbel)}')

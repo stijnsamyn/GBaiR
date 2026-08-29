@@ -280,25 +280,51 @@ let plan = null;                                   // de ontsleutelde GeoJSON
    breedtegraad: die ligt al goed en beweegt niet mee met de uitlijning.
    'plan' is de oude vorm, genormaliseerd over het kader van de tekening. */
 let stelsel = 'plan', refLat = START.lat, refLon = START.lon;
-const doek = L.canvas({ padding:.4 });
-/* Straten vormen een net, geen losse balkjes. Daarvoor moeten álle grijze
-   randen onder álle witte wegdekken liggen, anders snijdt de rand van de ene
-   straat dwars door het wegdek van de andere. Twee eigen vlakken regelen die
-   volgorde, en ze liggen onder de gebouwen zoals op een gewone kaart. */
+/* Wat op wat ligt. Van onder naar boven:
+ *   391 land        landdekking: zones, groen, water
+ *   393 grens       perceels- en wegranden, bomenrijen
+ *   394 bouw        de gebouwen -- dit is het enige vlak dat de muis vangt,
+ *                   want daar hangen de tooltips met de gebouwcode aan
+ *   396 straatrand  de grijze omboording van álle straten
+ *   397 straatdek   het witte wegdek van álle straten
+ *   405 boven       wat over de straat heen hoort: paden, spoor, oefenlijnen
+ *
+ * Straten liggen dus boven het groen en boven de gebouwen. Anders kleurt een
+ * bosvlak of een zone het wegdek mee en happen gebouwen stukken uit de straat:
+ * dat was precies wat er misging. Alle randen liggen onder alle wegdekken,
+ * zodat de omboording van de ene straat niet dwars door het wegdek van de
+ * andere snijdt.
+ *
+ * Elk vlak boven 'bouw' laat de muis erdoor (stijl.css). Een tekenvlak van
+ * Leaflet is een doek over de hele kaart: ving het wél, dan kwam je nooit
+ * meer aan het gebouw eronder. Het gewone overlayvlak (400) blijft vrij voor
+ * wat de pagina's er zelf in zetten -- de greep en de controlepunten. */
+map.createPane('land');       map.getPane('land').style.zIndex = 391;
+map.createPane('grens');      map.getPane('grens').style.zIndex = 393;
+map.createPane('bouw');       map.getPane('bouw').style.zIndex = 394;
 map.createPane('straatrand'); map.getPane('straatrand').style.zIndex = 396;
 map.createPane('straatdek');  map.getPane('straatdek').style.zIndex = 397;
-const doekRand = L.canvas({ padding:.4, pane:'straatrand' });
-const doekDek  = L.canvas({ padding:.4, pane:'straatdek'  });
+map.createPane('boven');      map.getPane('boven').style.zIndex = 405;
+const doekLand  = L.canvas({ padding:.4, pane:'land'  });
+const doekGrens = L.canvas({ padding:.4, pane:'grens' });
+const doek      = L.canvas({ padding:.4, pane:'bouw'  });   // de gebouwen
+const doekRand  = L.canvas({ padding:.4, pane:'straatrand' });
+const doekDek   = L.canvas({ padding:.4, pane:'straatdek'  });
+const doekBoven = L.canvas({ padding:.4, pane:'boven' });
 const gTerrein = L.layerGroup(), gZone = L.layerGroup(), gVlak = L.layerGroup(),
       gLijn = L.layerGroup(), gStraat = L.layerGroup(), gCode = L.layerGroup();
 const vormen = [];                                 // {laag, uv} om te herplaatsen
 const etiketten = [];                              // {marker, uv}
 let straten = [];                                  // {naam, delen:[[a,b],…]} in meters
 const straatEtiket = [];                           // om per zoomstand te tonen of te verbergen
+const codeEtiket = [];                             // gebouwcodes en oefennummers, idem
 const STRAATBREEDTE = 7;    // meter; de straat wordt als een band getekend en
 const BAND_MIN = 2, BAND_MAX = 64;   // schaalt dus mee met de zoom
 const straatband = [];      // de banden, om hun dikte bij te stellen
 const CODE_VANAF = 18;      // gebouwcodes pas van dichtbij
+const FTX_VANAF = 15.5;     // maar de oefenlaag is klein en is de reden dat je kijkt
+const FTX_NAAM_VANAF = 17;  // de naam bij een genummerde plek vraagt meer ruimte
+const NUMMER_ONDER = 22;    // zoveel beeldpunten onder het bolletje, zie stijl.css
 const VLAK_VANAF = 15.5;    // bij duizenden gebouwen pas van dichtbij tekenen
 const VEEL_VLAKKEN = 800;
 const NAAM_VANAF = 16.5;    // van hieraf één naam per straat
@@ -356,10 +382,21 @@ const STIJL = {
   ftx_gesloten: { color:'#8b5cd6', weight:4,   opacity:.85 },              // niet toegankelijk
   ftx_slecht:   { color:'#e08010', weight:4,   opacity:.85, dashArray:'9 7' },
   ftx_tevoet:   { color:'#1f9d3a', weight:5,   opacity:.95 },              // enkel te voet
-  ftx_poort:    { color:'#d92020', weight:5,   opacity:.95 }               // geen doorgang
+  ftx_poort:    { color:'#d92020', weight:5,   opacity:.95 },              // geen doorgang
+  /* de blauwe blokken K20-K23 van de papieren oefenkaart: geen legende, dus
+     niet reëel en niet fictief -- ze krijgen hun eigen kleur */
+  ftx_blok:     { color:'#1d4ed8', weight:2, fillColor:'#93c5fd', fillOpacity:.45 }
 };
 const TERREIN = { lijn:1, boomrand:1, spoor:1, pad:1,
                   ftx_gesloten:1, ftx_slecht:1, ftx_tevoet:1, ftx_poort:1 };
+/* Welke vlakken landdekking zijn, en dus onder de straat horen. */
+const LANDVLAK = { zone:1, groen:1, water:1 };
+/* Welke lijnen onder de straat horen. Perceels- en wegranden en bomenrijen
+   liggen op de grond; paden, spoor en de oefenlijnen liggen erover heen. */
+const GRENSLIJN = { lijn:1, boomrand:1 };
+/* De oefenlaag is de reden dat je de kaart van Leopoldsburg opent: die codes
+   mogen niet tot zoom 18 wachten zoals de gewone gebouwcodes. */
+const FTX = s => /^ftx_/.test(s);
 
 function bouwVector(data){
   if (!data || !data.features) return;
@@ -382,7 +419,8 @@ function bouwVector(data){
                                  : { color:'#475569', weight:2, fillColor:'#64748b', fillOpacity:.35, dashArray:'5 4' })
             : (STIJL[s] || STIJL.gebouw);
       const laag = L.polygon(uv.map(punt),
-                     Object.assign({ renderer:doek, interactive:s !== 'zone' }, stijl));
+                     Object.assign({ renderer:LANDVLAK[s] ? doekLand : doek,
+                                     interactive:s !== 'zone' }, stijl));
       if (s === 'ftx_gebouw')
         laag.bindTooltip(k.properties.echt ? 'reëel gebouw' : 'fictief gebouw', { direction:'top' });
       if (k.properties.code) laag.bindTooltip(k.properties.code, { direction:'top' });
@@ -390,20 +428,21 @@ function bouwVector(data){
       vormen.push({ laag, uv, ring:true, kenmerk:k });
       if (k.properties.code){
         const m = zwaartepunt(uv);
-        etiketten.push(voegEtiket(m, k.properties.code, 'code', gCode));
+        etiketten.push(voegEtiket(m, k.properties.code, 'code', gCode, FTX(s) ? FTX_VANAF : CODE_VANAF));
       }
 
     } else if (g.type === 'LineString' && TERREIN[s]){
       const uv = g.coordinates;
       const laag = L.polyline(uv.map(punt),
-                     Object.assign({ renderer:doek, interactive:false }, STIJL[s])).addTo(gTerrein);
+                     Object.assign({ renderer:GRENSLIJN[s] ? doekGrens : doekBoven,
+                                     interactive:false }, STIJL[s])).addTo(gTerrein);
       vormen.push({ laag, uv, ring:false });
 
     } else if (g.type === 'LineString'){
       const uv = g.coordinates;
       const rand = L.polyline(uv.map(punt),
                      Object.assign({ renderer:doekRand, interactive:false, pane:'straatrand',
-                                     weight:bandDikte() + 2.5 }, STIJL.straatrand)).addTo(gLijn);
+                                     weight:randDikte(bandDikte()) }, STIJL.straatrand)).addTo(gLijn);
       const laag = L.polyline(uv.map(punt),
                      Object.assign({ renderer:doekDek, pane:'straatdek',
                                      weight:bandDikte() }, STIJL.straat)).addTo(gLijn);
@@ -419,7 +458,21 @@ function bouwVector(data){
       etiketten.push(e); straatEtiket.push(e);
 
     } else if (g.type === 'Point'){
-      etiketten.push(voegEtiket(g.coordinates, k.properties.code, 'code', gCode));
+      if (s === 'ftx_nummer'){
+        /* de genummerde plekken 1..8 uit de legende van de oefenkaart:
+           een bolletje met het nummer, en van dichtbij de naam eronder */
+        etiketten.push(voegEtiket(g.coordinates, k.properties.nr, 'nummer', gCode, FTX_VANAF));
+        if (k.properties.naam){
+          const nm = voegEtiket(g.coordinates, k.properties.naam,
+                                'nummernaam', gCode, FTX_NAAM_VANAF);
+          nm.dy = NUMMER_ONDER;         // hij staat ónder het bolletje (stijl.css)
+          etiketten.push(nm);
+        }
+      } else if (k.properties.code != null){
+        etiketten.push(voegEtiket(g.coordinates, k.properties.code, 'code', gCode, CODE_VANAF));
+      }
+      /* een punt zonder code en zonder nummer heeft niets te zeggen; vroeger
+         kwam daar een bordje met het woord 'undefined' uit */
     }
   }
 
@@ -432,6 +485,8 @@ function bouwVector(data){
     if (!langste[e.naam] || e.lengte > langste[e.naam].lengte) langste[e.naam] = e;
   for (const e of straatEtiket) e.hoofd = (langste[e.naam] === e);
   straatEtiket.sort((a,b) => (b.hoofd - a.hoofd) || (b.lengte - a.lengte));
+  // korte codes gaan voor lange winkelnamen; de oefenlaag (lage 'vanaf') voorop
+  codeEtiket.sort((a,b) => (a.vanaf - b.vanaf) || (a.tekst.length - b.tekst.length));
 
   if (/OpenStreetMap/i.test(data.bron || ''))
     map.attributionControl.addAttribution('Gebouwen deels &copy; OpenStreetMap, ODbL');
@@ -457,10 +512,22 @@ function bouwVector(data){
     };
   }
   if (stelsel === 'wgs84' && !overlayVerplaatst){
-    const b = L.latLngBounds([]);
-    gVlak.eachLayer(l => b.extend(l.getBounds()));
-    gTerrein.eachLayer(l => b.extend(l.getBounds()));
-    if (b.isValid()) map.fitBounds(b.pad(.04));
+    /* Overpass geeft hele wegen terug zodra één knoop in de bak ligt, dus de
+       uiterste hoeken liggen kilometers verderop. Op de omhullende inzoomen
+       opent de kaart dan op de hele gemeente. Daarom het dichte midden: de
+       5e tot 95e honderdste van de gebouwmiddens. */
+    const lats = [], lons = [];
+    gVlak.eachLayer(l => { const c = l.getBounds().getCenter(); lats.push(c.lat); lons.push(c.lng); });
+    if (lats.length > 20){
+      lats.sort((a, b) => a - b); lons.sort((a, b) => a - b);
+      const lo = i => i[Math.floor(i.length * .05)], hi = i => i[Math.floor(i.length * .95)];
+      map.fitBounds(L.latLngBounds([lo(lats), lo(lons)], [hi(lats), hi(lons)]).pad(.06));
+    } else {
+      const b = L.latLngBounds([]);
+      gVlak.eachLayer(l => b.extend(l.getBounds()));
+      gTerrein.eachLayer(l => b.extend(l.getBounds()));
+      if (b.isValid()) map.fitBounds(b.pad(.04));
+    }
   }
   veelVlakken = gVlak.getLayers().length > VEEL_VLAKKEN;
   regelBand();
@@ -469,11 +536,13 @@ function bouwVector(data){
   melden(straten.length + ' straten geladen');
 }
 
-function voegEtiket(uv, tekst, soort, groep){
+function voegEtiket(uv, tekst, soort, groep, vanaf){
   const m = L.marker(punt(uv), { interactive:false, keyboard:false,
               icon: L.divIcon({ className:'etiket ' + soort, iconSize:[0,0],
                                 html:'<span>' + ontsmet(tekst) + '</span>' }) }).addTo(groep);
-  return { marker:m, uv };
+  const e = { marker:m, uv, tekst:String(tekst), vanaf:vanaf || 0 };
+  if (groep === gCode) codeEtiket.push(e);
+  return e;
 }
 
 /* Een straatnaam hoort langs zijn straat te liggen, en nooit op zijn kop.
@@ -528,39 +597,80 @@ function plaatsVector(){
 /* Van ver zijn 91 naambordjes één zwarte vlek. Van dichtbij mag alles.
    Daartussen: één naam per straat, op zijn langste stuk. */
 let veelVlakken = false;
+/* Wie een laag zelf uitvinkt in het lagenmenu, wil hem uit houden: de
+   zoomregel mag hem dan niet bij de eerste beweging terugzetten. Leaflet meldt
+   'overlayremove' ook als wíj de laag omzetten, vandaar de vlag. */
+const zelfUit = new Set();
+let zelfBezig = false;
+function zetLaag(laag, aan){
+  if (aan === map.hasLayer(laag)) return;
+  zelfBezig = true;
+  if (aan) laag.addTo(map); else map.removeLayer(laag);
+  zelfBezig = false;
+}
+map.on('overlayremove', e => { if (!zelfBezig) zelfUit.add(e.layer); });
+map.on('overlayadd',    e => { if (!zelfBezig) zelfUit.delete(e.layer); });
+
 function regelZoom(){
   const z = map.getZoom();
-  if (veelVlakken){
-    const wil = z >= VLAK_VANAF;
-    if (wil && !map.hasLayer(gVlak)) gVlak.addTo(map);
-    if (!wil && map.hasLayer(gVlak)) map.removeLayer(gVlak);
-  }
-  const codes = z >= CODE_VANAF;
-  if (codes && !map.hasLayer(gCode)) gCode.addTo(map);
-  if (!codes && map.hasLayer(gCode)) map.removeLayer(gCode);
+  if (veelVlakken && !zelfUit.has(gVlak)) zetLaag(gVlak, z >= VLAK_VANAF);
+  zetLaag(gCode, !zelfUit.has(gCode) && codeEtiket.length > 0);
 
   // Bordjes die elkaar overlappen helpen niemand. De belangrijkste straat komt
   // eerst aan bod (straatEtiket is daarop gesorteerd), dus die wint een plek.
   // Dezelfde naam moet verder uit elkaar staan dan twee verschillende.
   const gehouden = [];
   const breed = e => 3.6 * e.naam.length + 16;      // ruwe breedte van het bordje
+  const buiten = q => q.x < -200 || q.y < -200 ||
+        q.x > map.getSize().x + 200 || q.y > map.getSize().y + 200;
   for (const e of straatEtiket){
     let wil = z >= ALLE_VANAF || (z >= NAAM_VANAF && e.hoofd);
     let q = null;
     if (wil){
       q = map.latLngToContainerPoint(e.marker.getLatLng());
-      if (q.x < -200 || q.y < -200 || q.x > map.getSize().x + 200 || q.y > map.getSize().y + 200){
+      if (buiten(q)){
         wil = false;                                 // buiten beeld hoeft niet
       } else for (const g of gehouden){
-        const nodig = g.naam === e.naam ? 150 : (breed(e) + breed(g.el)) / 2 + 10;
+        const nodig = g.naam === e.naam ? 150 : (breed(e) + g.breedte) / 2 + 10;
         if (q.distanceTo(g.punt) < nodig){ wil = false; break; }
       }
     }
-    if (wil) gehouden.push({ naam:e.naam, el:e, punt:q });
+    if (wil) gehouden.push({ naam:e.naam, breedte:breed(e), punt:q, vak:vakVan(e, q, breed(e)) });
     if (wil && !gStraat.hasLayer(e.marker)){ gStraat.addLayer(e.marker); draaiEtiket(e); }
     if (!wil && gStraat.hasLayer(e.marker)) gStraat.removeLayer(e.marker);
   }
+
+  /* Gebouwcodes hadden nog geen enkele botsingsregel: in een dicht blok
+     schoven ze over elkaar heen en dwars over de straatnamen. Ze komen ná de
+     straatnamen aan de beurt en wijken daarvoor; korte codes gaan voor lange
+     winkelnamen, en de oefenlaag gaat voor alles. */
+  for (const e of codeEtiket){
+    let wil = z >= e.vanaf && !zelfUit.has(gCode);
+    let q = null;
+    if (wil){
+      q = map.latLngToContainerPoint(e.marker.getLatLng());
+      if (buiten(q)){
+        wil = false;
+      } else {
+        const bt = 5.5 * e.tekst.length + 10, vak = vakVan(e, q, bt);
+        for (const g of gehouden) if (botst(vak, g.vak)){ wil = false; break; }
+        if (wil) gehouden.push({ naam:null, breedte:bt, punt:q, vak });
+      }
+    }
+    if (wil && !gCode.hasLayer(e.marker)) gCode.addLayer(e.marker);
+    if (!wil && gCode.hasLayer(e.marker)) gCode.removeLayer(e.marker);
+  }
 }
+
+/* het rechthoekje dat een bordje op het scherm beslaat; een gedraaide
+   straatnaam krijgt zijn omhullende rechthoek */
+function vakVan(e, q, breedte){
+  const h = 15, r = (e.hoek || 0) * Math.PI/180;
+  const c = Math.abs(Math.cos(r)), s = Math.abs(Math.sin(r));
+  return { x:q.x, y:q.y + (e.dy || 0), hw:(breedte*c + h*s)/2 + 2, hh:(breedte*s + h*c)/2 + 2 };
+}
+const botst = (a, b) => Math.abs(a.x - b.x) < a.hw + b.hw &&
+                        Math.abs(a.y - b.y) < a.hh + b.hh;
 map.on('zoomend moveend', regelZoom);
 /* Een straat is geen lijn maar een strook van een meter of zeven. Ze wordt dus
    in meters getekend en niet in beeldpunten: zoom je in, dan wordt ze breder,
@@ -573,10 +683,14 @@ function pxPerMeter(){
 function bandDikte(){
   return Math.max(BAND_MIN, Math.min(BAND_MAX, STRAATBREEDTE * pxPerMeter()));
 }
+/* De omboording moet meegroeien met de straat. Een vaste 1,25 beeldpunt aan
+   elke kant is van ver te dik en van dichtbij een haarlijn die je niet ziet;
+   een straat van zeven meter breed hoort een randje van een halve meter. */
+function randDikte(d){ return d + Math.max(2.5, Math.min(d * .28, 8)); }
 function regelBand(){
-  const d = bandDikte();
+  const d = bandDikte(), r = randDikte(d);
   for (let i = 0; i < straatband.length; i += 2){
-    straatband[i].setStyle({ weight:d + 2.5 });      // de omboording
+    straatband[i].setStyle({ weight:r });            // de omboording
     straatband[i+1].setStyle({ weight:d });          // het witte wegdek
   }
 }

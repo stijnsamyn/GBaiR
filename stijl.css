@@ -73,6 +73,21 @@
   .etiket.straat span{font-size:12px;color:#0b4da2}
   .etiket.code span{font-size:10.5px;color:#2b3540}
 
+  /* Een tekenvlak van Leaflet is een doek over de hele kaart. Ligt zo'n doek
+     boven de gebouwen en vangt het de muis, dan kom je nooit meer aan het
+     gebouw eronder om zijn code te zien. Alleen het gebouwvlak vangt dus. */
+  .leaflet-land-pane,.leaflet-grens-pane,
+  .leaflet-straatrand-pane,.leaflet-straatdek-pane,
+  .leaflet-boven-pane{pointer-events:none}
+
+  /* de genummerde plekken 1..8 uit de legende van de oefenkaart */
+  .etiket.nummer span{width:19px;height:19px;line-height:16px;text-align:center;
+          font-size:11px;color:#fff;background:#1d4ed8;border:1.5px solid #fff;
+          border-radius:50%;text-shadow:none;box-shadow:0 1px 3px rgba(0,0,0,.4)}
+  /* NUMMER_ONDER in kaartkern.js moet gelijk zijn aan deze verschuiving */
+  .etiket.nummernaam span{font-size:10.5px;color:#123f8f;
+          transform:translate(-50%,22px)}
+
   /* ------------------------------- zoeken ------------------------------ */
   #zoek{position:absolute;z-index:1100;top:max(10px,env(safe-area-inset-top));
         left:max(10px,env(safe-area-inset-left));right:max(56px,env(safe-area-inset-right))}
