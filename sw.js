@@ -1,6 +1,6 @@
 /* Offline cache. Verhoog VERSIE na elke wijziging, anders blijft een
    toestel op de oude pagina hangen. */
-const VERSIE = 'wtc-v7';
+const VERSIE = 'wtc-v8';
 const SCHIL  = 'schil-'  + VERSIE;
 const TEGELS = 'tegels-' + VERSIE;
 const MAX_TEGELS = 900;

@@ -10,7 +10,12 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 WW="${WACHTWOORD:-ACP}"
-DROOG=0; [ "${1:-}" = "--droog" ] && DROOG=1
+DROOG=0
+if [ "${1:-}" = "--droog" ]; then DROOG=1; shift; fi
+# Zonder argumenten gaat alles mee. Geef je bestanden op, dan alleen die --
+# nodig zodra er nog een agent in de werkkopie schrijft, anders commit je
+# zijn halve werk mee onder jouw boodschap.
+PADEN=("$@")
 
 echo "1/4  onversleutelde kaartlagen mogen niet in de repo"
 mis=0
@@ -49,7 +54,8 @@ echo "4/4  vastleggen en online zetten"
 if [ -z "$(git status --porcelain)" ]; then
   echo "   niets gewijzigd"
 else
-  git add -A
+  if [ ${#PADEN[@]} -gt 0 ]; then git add -- "${PADEN[@]}"; else git add -A; fi
+  git diff --cached --quiet && { echo "   niets van deze bestanden gewijzigd"; git push -q origin main; exit 0; }
   git commit -q -m "${BERICHT:-Kaartlagen bijgewerkt}"
 fi
 git push -q origin main
