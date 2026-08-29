@@ -27,12 +27,19 @@ const START = { lat: 51.1862115, lon: 4.2085574, w: 1006, h: 912, rot: 0 };
 /* De pagina kan meer dan één kaart tonen; kies met ?kaart=<sleutel>.
    Een kaart heeft altijd een vectorlaag, en soms een gescande plattegrond
    eronder met een eigen plaatsing. */
+/* `bak` is de zuid/west/noord/oost van elke kaart. Daarmee weet de pagina waar
+   een kaart ligt zonder hem te openen, en kan ze wachten met laden tot je er
+   werkelijk naartoe kijkt. */
 const KAARTEN = {
   wtc: { titel:'WTC — straatnamen', vector:'plan.enc',
-         beeld:'kaart.enc', plaatsing:'plaatsing.json' },
-  leopoldsburg: { titel:'Leopoldsburg', vector:'leopoldsburg.enc' },
-  houthulst: { titel:'Klerken (proef)', vector:'houthulst.enc' }
+         beeld:'kaart.enc', plaatsing:'plaatsing.json',
+         bak:[51.1780, 4.1990, 51.1930, 4.2180] },
+  leopoldsburg: { titel:'Leopoldsburg', vector:'leopoldsburg.enc',
+         bak:[51.1075, 5.2400, 51.1265, 5.2930] },
+  houthulst: { titel:'Klerken (proef)', vector:'houthulst.enc',
+         bak:[50.98471, 2.89220, 51.00271, 2.92075] }
 };
+const bakVan = k => L.latLngBounds([k.bak[0], k.bak[1]], [k.bak[2], k.bak[3]]);
 /* De drie kaarten liggen ver uit elkaar in het land, dus ze kunnen samen in
    één sessie. Je kiest niet vooraf: alles staat er, en welke je ziet hangt af
    van waar je kijkt. ?kaart= bepaalt alleen nog waar de kaart opent. */
@@ -40,6 +47,41 @@ const KAARTSLEUTEL = (new URLSearchParams(location.search).get('kaart') || 'wtc'
 const KAART = KAARTEN[KAARTSLEUTEL] || KAARTEN.wtc;
 const kaartlagen = {};        // sleutel -> { titel, features, omhullende }
 let actieveKaart = KAARTSLEUTEL;
+let wachtwoordOnthouden = null;
+const bezigMet = {};          // sleutel -> belofte, zodat we niet twee keer beginnen
+
+/* Een kaart kost 600 000 PBKDF2-rondes om te openen. Drie tegelijk legt een
+   gsm plat, en meestal kijk je er maar naar één. Dus pas laden wanneer je
+   ernaartoe kijkt of ernaartoe springt. */
+function laadKaart(sleutel){
+  if (kaartlagen[sleutel] || bezigMet[sleutel] || !wachtwoordOnthouden) return bezigMet[sleutel];
+  const k = KAARTEN[sleutel];
+  if (!k) return;
+  melden(k.titel + ' laden…');
+  bezigMet[sleutel] = (async () => {
+    for (let poging = 1; poging <= 2; poging++){
+      try {
+        bouwVector(await ontsleutelVector(wachtwoordOnthouden, k.vector), sleutel);
+        melden(k.titel + ' geladen');
+        return;
+      } catch(e){
+        if (poging === 2){
+          delete bezigMet[sleutel];      // een volgende keer mag het opnieuw
+          melden(k.titel + ' laadt niet: ' + (e && e.message ? e.message : e), 'warn');
+        }
+      }
+    }
+  })();
+  return bezigMet[sleutel];
+}
+
+/* Kijk je naar het gebied van een kaart die er nog niet is, haal hem dan. */
+function kijkWatErNodigIs(){
+  if (!wachtwoordOnthouden) return;
+  const zicht = map.getBounds();
+  for (const [sleutel, k] of Object.entries(KAARTEN))
+    if (!kaartlagen[sleutel] && zicht.intersects(bakVan(k))) laadKaart(sleutel);
+}
 
 const PLAATSING = KAART.plaatsing;
 const BESTAND = KAART.beeld;    // gemaakt met: node versleutel.mjs kaart.webp <wachtwoord>
@@ -150,21 +192,25 @@ async function ontsleutelVector(wachtwoord, bestand){
 const keuze = document.getElementById('kaartkeuze');
 function vulKaartkeuze(){
   if (!keuze) return;
+  const nu = keuze.value;
   keuze.innerHTML = '';
-  for (const [sleutel, laag] of Object.entries(kaartlagen)){
+  for (const [sleutel, k] of Object.entries(KAARTEN)){
     const o = document.createElement('option');
-    o.value = sleutel; o.textContent = laag.titel;
-    if (sleutel === actieveKaart) o.selected = true;
+    o.value = sleutel;
+    o.textContent = k.titel + (kaartlagen[sleutel] ? '' : ' …');
+    if (sleutel === (nu || actieveKaart)) o.selected = true;
     keuze.appendChild(o);
   }
-  keuze.hidden = Object.keys(kaartlagen).length < 2;
+  keuze.hidden = Object.keys(KAARTEN).length < 2;
 }
-if (keuze) keuze.onchange = () => {
-  const laag = kaartlagen[keuze.value];
-  if (laag && laag.omhullende.isValid()){
-    map.fitBounds(laag.omhullende.pad(.05));
-    melden('Naar ' + laag.titel);
-  }
+if (keuze) keuze.onchange = async () => {
+  const sleutel = keuze.value, k = KAARTEN[sleutel];
+  if (!k) return;
+  map.fitBounds(bakVan(k));                       // eerst kijken, dan laden
+  await laadKaart(sleutel);
+  const laag = kaartlagen[sleutel];
+  if (laag && laag.omhullende.isValid()) map.fitBounds(laag.omhullende.pad(.05));
+  vulKaartkeuze();
 };
 
 const slot = document.getElementById('slot');
@@ -184,23 +230,8 @@ async function probeer(wachtwoord, stil){
     slot.classList.add('weg');
     start(url);
     bouwVector(data, KAARTSLEUTEL);
-    // De andere kaarten komen erbij, maar één voor één: elke laag kost 600 000
-    // PBKDF2-rondes, en drie daarvan tegelijk legt een gsm plat.
-    (async () => {
-      for (const [sleutel, k] of Object.entries(KAARTEN)){
-        if (sleutel === KAARTSLEUTEL) continue;
-        for (let poging = 1; poging <= 2; poging++){
-          try {
-            await new Promise(r => setTimeout(r, 150));      // even lucht geven
-            bouwVector(await ontsleutelVector(wachtwoord, k.vector), sleutel);
-            break;
-          } catch(e){
-            if (poging === 2)
-              melden(k.titel + ' laadt niet: ' + (e && e.message ? e.message : e), 'warn');
-          }
-        }
-      }
-    })();
+    wachtwoordOnthouden = wachtwoord;
+    kijkWatErNodigIs();
     return true;
   } catch(e){
     try { localStorage.removeItem(SLEUTELKEY); } catch(err){}
@@ -745,6 +776,7 @@ function kiesActieve(){
   }
 }
 map.on('moveend', kiesActieve);
+map.on('moveend', kijkWatErNodigIs);
 /* Een straat is geen lijn maar een strook van een meter of zeven. Ze wordt dus
    in meters getekend en niet in beeldpunten: zoom je in, dan wordt ze breder,
    net als de gebouwen eronder. */
