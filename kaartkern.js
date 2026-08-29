@@ -31,7 +31,7 @@ const KAARTEN = {
   wtc: { titel:'WTC — straatnamen', vector:'plan.enc',
          beeld:'kaart.enc', plaatsing:'plaatsing.json' },
   leopoldsburg: { titel:'Leopoldsburg', vector:'leopoldsburg.enc' },
-  houthulst: { titel:'Houthulst (proef)', vector:'houthulst.enc' }
+  houthulst: { titel:'Klerken (proef)', vector:'houthulst.enc' }
 };
 const KAARTSLEUTEL = (new URLSearchParams(location.search).get('kaart') || 'wtc');
 const KAART = KAARTEN[KAARTSLEUTEL] || KAARTEN.wtc;
@@ -281,6 +281,14 @@ let plan = null;                                   // de ontsleutelde GeoJSON
    'plan' is de oude vorm, genormaliseerd over het kader van de tekening. */
 let stelsel = 'plan', refLat = START.lat, refLon = START.lon;
 const doek = L.canvas({ padding:.4 });
+/* Straten vormen een net, geen losse balkjes. Daarvoor moeten álle grijze
+   randen onder álle witte wegdekken liggen, anders snijdt de rand van de ene
+   straat dwars door het wegdek van de andere. Twee eigen vlakken regelen die
+   volgorde, en ze liggen onder de gebouwen zoals op een gewone kaart. */
+map.createPane('straatrand'); map.getPane('straatrand').style.zIndex = 396;
+map.createPane('straatdek');  map.getPane('straatdek').style.zIndex = 397;
+const doekRand = L.canvas({ padding:.4, pane:'straatrand' });
+const doekDek  = L.canvas({ padding:.4, pane:'straatdek'  });
 const gTerrein = L.layerGroup(), gZone = L.layerGroup(), gVlak = L.layerGroup(),
       gLijn = L.layerGroup(), gStraat = L.layerGroup(), gCode = L.layerGroup();
 const vormen = [];                                 // {laag, uv} om te herplaatsen
@@ -329,7 +337,10 @@ function naarVlak(ll){
 }
 
 const STIJL = {
-  zone:      { color:'#d9534f', weight:1,   fillColor:'#d9534f', fillOpacity:.10 },
+  zone:      { color:'#d9534f', weight:1.5, fillColor:'#d9534f', fillOpacity:.14 },
+  zone_osm:  { color:'#b9a37a', weight:1,   fillColor:'#cbb98f', fillOpacity:.10 },  // domeingrens
+  groen:     { color:'#8fb08a', weight:.8,  fillColor:'#cfe0c8', fillOpacity:.55 },
+  water:     { color:'#7aa8d8', weight:.8,  fillColor:'#b9d4ec', fillOpacity:.7 },
   gebouw:    { color:'#46525f', weight:1,   fillColor:'#8d99a6', fillOpacity:.60 },
   bijgebouw: { color:'#6e7984', weight:.8,  fillColor:'#c2cad2', fillOpacity:.50 },
   /* een straat is wit met een grijze omboording, zoals op een gewone kaart:
@@ -338,6 +349,8 @@ const STIJL = {
   straat:     { color:'#ffffff', opacity:1,   lineCap:'round', lineJoin:'round' },
   lijn:      { color:'#7c8894', weight:1,   opacity:.85 },   // grens, percelen, wegranden
   boomrand:  { color:'#5c8a63', weight:1.2, opacity:.85 },
+  pad:       { color:'#b9c2cb', weight:1.6, opacity:.9, dashArray:'5 4' },  // naamloos
+
   spoor:     { color:'#6b7683', weight:1.5, opacity:.8, dashArray:'6 5' },
   /* de oefenkaart: wat je niet weet als je alleen de straten kent */
   ftx_gesloten: { color:'#8b5cd6', weight:4,   opacity:.85 },              // niet toegankelijk
@@ -345,7 +358,7 @@ const STIJL = {
   ftx_tevoet:   { color:'#1f9d3a', weight:5,   opacity:.95 },              // enkel te voet
   ftx_poort:    { color:'#d92020', weight:5,   opacity:.95 }               // geen doorgang
 };
-const TERREIN = { lijn:1, boomrand:1, spoor:1,
+const TERREIN = { lijn:1, boomrand:1, spoor:1, pad:1,
                   ftx_gesloten:1, ftx_slecht:1, ftx_tevoet:1, ftx_poort:1 };
 
 function bouwVector(data){
@@ -363,7 +376,8 @@ function bouwVector(data){
 
     if (g.type === 'Polygon'){
       const uv = g.coordinates[0];
-      const stijl = s === 'ftx_gebouw'
+      const stijl = (s === 'zone' && k.properties.bron === 'osm') ? STIJL.zone_osm
+            : s === 'ftx_gebouw'
             ? (k.properties.echt ? { color:'#c2410c', weight:2, fillColor:'#f97316', fillOpacity:.35 }
                                  : { color:'#475569', weight:2, fillColor:'#64748b', fillOpacity:.35, dashArray:'5 4' })
             : (STIJL[s] || STIJL.gebouw);
@@ -388,10 +402,11 @@ function bouwVector(data){
     } else if (g.type === 'LineString'){
       const uv = g.coordinates;
       const rand = L.polyline(uv.map(punt),
-                     Object.assign({ renderer:doek, interactive:false,
+                     Object.assign({ renderer:doekRand, interactive:false, pane:'straatrand',
                                      weight:bandDikte() + 2.5 }, STIJL.straatrand)).addTo(gLijn);
       const laag = L.polyline(uv.map(punt),
-                     Object.assign({ renderer:doek, weight:bandDikte() }, STIJL.straat)).addTo(gLijn);
+                     Object.assign({ renderer:doekDek, pane:'straatdek',
+                                     weight:bandDikte() }, STIJL.straat)).addTo(gLijn);
       vormen.push({ laag:rand, uv, ring:false });
       vormen.push({ laag, uv, ring:false });
       straatband.push(rand, laag);

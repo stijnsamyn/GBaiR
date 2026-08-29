@@ -2,7 +2,12 @@
   "_": "Eén recept voor elke kaart. OpenStreetMap levert altijd de basis: gebouwen, straten, terrein. Daar bovenop komt wat alleen op de papieren kaart staat.",
   "wtc": {
     "titel": "WTC — straatnamen",
-    "bak": [51.1780, 4.1990, 51.1930, 4.2180],
+    "bak": [
+      51.178,
+      4.199,
+      51.193,
+      4.218
+    ],
     "bron": "Kaart WTC - Straatnamen (versie 2026), getekend plan",
     "extra": {
       "straatnamen": "alle 60 — OSM kent er geen enkele op het domein",
@@ -11,24 +16,52 @@
       "terrein": "grens, perceelgrenzen, wegranden, boomranden",
       "gebouwen": "alleen waar OSM er geen heeft"
     },
-    "pijplijn": ["namen", "codes", "gebouwen", "zones", "terrein", "koppel", "straten", "osm", "pas_osm", "bouw"]
+    "pijplijn": [
+      "namen",
+      "codes",
+      "gebouwen",
+      "zones",
+      "terrein",
+      "koppel",
+      "straten",
+      "osm",
+      "pas_osm",
+      "bouw"
+    ]
   },
   "leopoldsburg": {
     "titel": "Leopoldsburg",
-    "bak": [51.1075, 5.2400, 51.1265, 5.2930],
+    "bak": [
+      51.1075,
+      5.24,
+      51.1265,
+      5.293
+    ],
     "bron": "Kaart Leopoldsburg Raster, FTX-oefenkaart V 20240815",
     "extra": {
       "toegankelijkheid": "gesloten straten, slechte staat, poorten, enkel te voet",
       "gebouwen": "reëel tegenover fictief voor de oefening",
       "gebouwcodes": "E41, E51-E53, K20-K23, Mess, Stadion"
     },
-    "pijplijn": ["osm_kaart", "pas_ftx", "ftx_overlay", "samenvoegen"]
+    "pijplijn": [
+      "osm_kaart",
+      "pas_ftx",
+      "ftx_overlay",
+      "samenvoegen"
+    ]
   },
   "houthulst": {
-    "titel": "Houthulst (proef)",
-    "bak": [50.9883, 2.8979, 50.9991, 2.9151],
-    "bron": "geen papieren kaart — enkel OpenStreetMap, om de toepassing ter plaatse te beproeven",
+    "titel": "Klerken (proef)",
+    "bak": [
+      50.98471,
+      2.8922,
+      51.00271,
+      2.92075
+    ],
+    "bron": "geen papieren kaart — enkel OpenStreetMap, om de toepassing ter plaatse te beproeven; dekt Klerken, niet het centrum van Houthulst",
     "extra": {},
-    "pijplijn": ["osm_kaart"]
+    "pijplijn": [
+      "osm_kaart"
+    ]
   }
 }

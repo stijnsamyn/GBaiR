@@ -52,7 +52,8 @@ def rond(g, gesloten=False):
                 vorm = max(vorm.geoms, key=lambda q: q.area)
             r = list(vorm.exterior.coords) if not vorm.is_empty else r
         else:
-            r = list(vorm.simplify(TOL, preserve_topology=False).coords)
+            # topologie bewaren, anders vallen kruispuntknopen weg
+            r = list(vorm.simplify(TOL, preserve_topology=True).coords)
     return [[round(x, 5), round(y, 5)] for x, y in r]
 def sluit(r):
     return r + [r[0]] if r[0] != r[-1] else r
@@ -79,8 +80,14 @@ for e in el:
     elif 'highway' in t:
         if t['highway'] not in WEGSOORT: continue
         naam = t.get('name') or t.get('ref')
-        if not naam: continue                       # naamloos dienstweggetje helpt niet
-        voeg('straat', {'type':'LineString','coordinates':p}, naam=naam)
+        if naam:
+            voeg('straat', {'type':'LineString','coordinates':p}, naam=naam)
+        else:
+            # Naamloze dienstwegen en paden wél tekenen, maar zonder naam. Laat
+            # je ze weg, dan meldt de app daar de naam van een buurstraat --
+            # gemeten: ruim een kwart van die punten kreeg stellig een verkeerde
+            # naam. Als 'pad' tekent de kaart ze en zwijgt de app er terecht.
+            voeg('pad', {'type':'LineString','coordinates':p}, wat=t['highway'])
     elif 'railway' in t:
         voeg('spoor', {'type':'LineString','coordinates':p})
     elif t.get('barrier'):
