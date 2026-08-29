@@ -30,7 +30,8 @@ const START = { lat: 51.1862115, lon: 4.2085574, w: 1006, h: 912, rot: 0 };
 const KAARTEN = {
   wtc: { titel:'WTC — straatnamen', vector:'plan.enc',
          beeld:'kaart.enc', plaatsing:'plaatsing.json' },
-  leopoldsburg: { titel:'Leopoldsburg', vector:'leopoldsburg.enc' }
+  leopoldsburg: { titel:'Leopoldsburg', vector:'leopoldsburg.enc' },
+  houthulst: { titel:'Houthulst (proef)', vector:'houthulst.enc' }
 };
 const KAARTSLEUTEL = (new URLSearchParams(location.search).get('kaart') || 'wtc');
 const KAART = KAARTEN[KAARTSLEUTEL] || KAARTEN.wtc;

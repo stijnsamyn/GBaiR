@@ -1,6 +1,6 @@
 /* Offline cache. Verhoog VERSIE na elke wijziging, anders blijft een
    toestel op de oude pagina hangen. */
-const VERSIE = 'wtc-v5';
+const VERSIE = 'wtc-v6';
 const SCHIL  = 'schil-'  + VERSIE;
 const TEGELS = 'tegels-' + VERSIE;
 const MAX_TEGELS = 900;
@@ -8,7 +8,7 @@ const MAX_TEGELS = 900;
 const BESTANDEN = [
   '.', 'index.html', 'instellingen.html', 'manifest.webmanifest',
   'stijl.css', 'kaartkern.js', 'plaatsing.json',
-  'kaart.enc', 'plan.enc', 'leopoldsburg.enc',
+  'kaart.enc', 'plan.enc', 'leopoldsburg.enc', 'houthulst.enc',
   'vendor/leaflet.css', 'vendor/leaflet.js', 'vendor/leaflet-imageoverlay-rotated.js',
   'vendor/images/layers.png', 'vendor/images/layers-2x.png',
   'vendor/images/marker-icon.png', 'vendor/images/marker-icon-2x.png', 'vendor/images/marker-shadow.png',

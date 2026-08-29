@@ -31,7 +31,8 @@ r, g, b = a[..., 0], a[..., 1], a[..., 2]
 buiten = np.zeros((H, W), bool)
 buiten[:int(H*0.13), int(W*0.76):] = True          # de inzet rechtsboven
 buiten[int(H*0.83):, int(W*0.82):] = True          # schaalkader en versiedoos
-buiten[int(H*0.92):, :int(W*0.10)] = True          # het logo linksonder
+buiten[int(H*0.90):, :int(W*0.17)] = True          # het logo en de schaalbalk linksonder
+buiten[int(H*0.955):, :] = True                    # de onderrand met de bronvermelding
 buiten[:, :int(W*0.008)] = True                    # de randen van het blad
 buiten[:, int(W*0.995):] = True
 buiten[:int(H*0.004), :] = True
@@ -50,7 +51,13 @@ MASKERS = {
     'poort':     dichtbij((197,  70,   2), 50),    # rode kern: hekwerk of poort
     'geel':      dichtbij((242, 236,  15), 45),    # de gele omranding van beide
 }
-ZALM  = dichtbij((247, 170, 152), 26)
+# De hoofdwegen van de ondergrond zijn even zalmroze als een reëel gebouw.
+# Ze vormen wel één samenhangend net; een gebouw staat op zichzelf.
+zalm_alles = dichtbij((247, 170, 152), 26)
+_lab, _n = ndi.label(morphology.binary_closing(zalm_alles, morphology.disk(2)))
+_opp = np.bincount(_lab.ravel()); _opp[0] = 0
+_weg = np.isin(_lab, np.nonzero(_opp > 20000)[0])
+ZALM = zalm_alles & ~morphology.binary_dilation(_weg, morphology.disk(3))
 GRIJS = (abs(r - g) < 10) & (abs(g - b) < 10) & (r > 150) & (r < 200) & ~buiten
 
 MINL = int(12 / schaal)          # korter dan 12 m is ruis
