@@ -184,13 +184,23 @@ async function probeer(wachtwoord, stil){
     slot.classList.add('weg');
     start(url);
     bouwVector(data, KAARTSLEUTEL);
-    // de andere kaarten komen erbij zodra ze er zijn; de eerste bepaalt de blik
-    for (const [sleutel, k] of Object.entries(KAARTEN)){
-      if (sleutel === KAARTSLEUTEL) continue;
-      ontsleutelVector(wachtwoord, k.vector)
-        .then(d => bouwVector(d, sleutel))
-        .catch(() => melden('Kaart ' + k.titel + ' kon niet geladen worden', 'warn'));
-    }
+    // De andere kaarten komen erbij, maar één voor één: elke laag kost 600 000
+    // PBKDF2-rondes, en drie daarvan tegelijk legt een gsm plat.
+    (async () => {
+      for (const [sleutel, k] of Object.entries(KAARTEN)){
+        if (sleutel === KAARTSLEUTEL) continue;
+        for (let poging = 1; poging <= 2; poging++){
+          try {
+            await new Promise(r => setTimeout(r, 150));      // even lucht geven
+            bouwVector(await ontsleutelVector(wachtwoord, k.vector), sleutel);
+            break;
+          } catch(e){
+            if (poging === 2)
+              melden(k.titel + ' laadt niet: ' + (e && e.message ? e.message : e), 'warn');
+          }
+        }
+      }
+    })();
     return true;
   } catch(e){
     try { localStorage.removeItem(SLEUTELKEY); } catch(err){}
@@ -416,6 +426,7 @@ const FTX = s => /^ftx_/.test(s);
 function bouwVector(data, sleutel){
   if (!data || !data.features) return;
   sleutel = sleutel || KAARTSLEUTEL;
+  if (kaartlagen[sleutel]) return;        // twee keer tekenen verdubbelt alles
   plan = data;
   kaartlagen[sleutel] = { titel:(KAARTEN[sleutel] || {}).titel || sleutel,
                           features:data.features, omhullende:L.latLngBounds([]) };
