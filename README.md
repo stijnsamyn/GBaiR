@@ -69,8 +69,15 @@ vectorlaag, en soms een gescande plattegrond eronder met een eigen plaatsing.
 
 | kaart | herkomst |
 |---|---|
-| `wtc` | getekend plan, uit de PDF geëxtraheerd, met OSM voor de ligging |
-| `leopoldsburg` | uit OpenStreetMap, plus de FTX-overlay van de papieren oefenkaart |
+| `wtc` | OSM, plus de straatnamen en MG-codes van het getekende plan |
+| `leopoldsburg` | OSM, plus de FTX-overlay van de papieren oefenkaart |
+| `houthulst` | enkel OSM — een proefkaart om de toepassing ter plaatse te beproeven |
+
+Alle drie volgen hetzelfde recept, vastgelegd in `vectorplan/kaarten.json`:
+**OpenStreetMap levert de basis — gebouwen, straten, terrein — en van de
+papieren kaart komt alleen wat daar bovenop staat.** Bij Houthulst is dat
+niets, bij Leopoldsburg de toegankelijkheid en de gebouwcodes, bij WTC de
+straatnamen die in geen enkele kaartdienst staan.
 
 Bij Leopoldsburg valt er niets te extraheren: OSM kent daar **4508 gebouwen en
 163 straatnamen**, en alle namen van de papieren kaart staan er identiek in.

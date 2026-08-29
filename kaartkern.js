@@ -332,7 +332,10 @@ const STIJL = {
   zone:      { color:'#d9534f', weight:1,   fillColor:'#d9534f', fillOpacity:.10 },
   gebouw:    { color:'#46525f', weight:1,   fillColor:'#8d99a6', fillOpacity:.60 },
   bijgebouw: { color:'#6e7984', weight:.8,  fillColor:'#c2cad2', fillOpacity:.50 },
-  straat:    { color:'#3b7ddd', opacity:.32, lineCap:'round', lineJoin:'round' },
+  /* een straat is wit met een grijze omboording, zoals op een gewone kaart:
+     eerst de brede grijze band, daar de smallere witte overheen */
+  straatrand: { color:'#9aa5b1', opacity:.95, lineCap:'round', lineJoin:'round' },
+  straat:     { color:'#ffffff', opacity:1,   lineCap:'round', lineJoin:'round' },
   lijn:      { color:'#7c8894', weight:1,   opacity:.85 },   // grens, percelen, wegranden
   boomrand:  { color:'#5c8a63', weight:1.2, opacity:.85 },
   spoor:     { color:'#6b7683', weight:1.5, opacity:.8, dashArray:'6 5' },
@@ -384,10 +387,14 @@ function bouwVector(data){
 
     } else if (g.type === 'LineString'){
       const uv = g.coordinates;
+      const rand = L.polyline(uv.map(punt),
+                     Object.assign({ renderer:doek, interactive:false,
+                                     weight:bandDikte() + 2.5 }, STIJL.straatrand)).addTo(gLijn);
       const laag = L.polyline(uv.map(punt),
                      Object.assign({ renderer:doek, weight:bandDikte() }, STIJL.straat)).addTo(gLijn);
+      vormen.push({ laag:rand, uv, ring:false });
       vormen.push({ laag, uv, ring:false });
-      straatband.push(laag);
+      straatband.push(rand, laag);
       const naam = k.properties.naam;
       (perStraat[naam] = perStraat[naam] || []).push(uv);
       const e = voegEtiket(k.properties.labelpunt || midden(uv), naam, 'straat', gStraat);
@@ -553,7 +560,10 @@ function bandDikte(){
 }
 function regelBand(){
   const d = bandDikte();
-  for (const l of straatband) l.setStyle({ weight:d });
+  for (let i = 0; i < straatband.length; i += 2){
+    straatband[i].setStyle({ weight:d + 2.5 });      // de omboording
+    straatband[i+1].setStyle({ weight:d });          // het witte wegdek
+  }
 }
 map.on('zoomend', regelBand);
 
